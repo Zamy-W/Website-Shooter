@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Game Server (dev)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "Game Server (production)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
+      "port": 3000
+    }
+  ]
+}

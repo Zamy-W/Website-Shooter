@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Admin Dashboard</title>
+    <style>
+        :root {
+            --bg: #09111a;
+            --panel: rgba(10, 18, 28, 0.92);
+            --panel-strong: rgba(13, 24, 37, 0.98);
+            --border: rgba(116, 181, 255, 0.18);
+            --text: #ecf7ff;
+            --muted: #8ba3b7;
+            --accent: #7bf1c8;
+            --accent-2: #6fb8ff;
+            --danger: #ff7f7f;
+            --warning: #ffd36f;
+            --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(123, 241, 200, 0.15), transparent 28%),
+                radial-gradient(circle at top right, rgba(111, 184, 255, 0.14), transparent 30%),
+                linear-gradient(160deg, #08111a 0%, #0d1824 55%, #101f2e 100%);
+        }
+
+        .shell {
+            width: min(1280px, calc(100% - 32px));
+            margin: 24px auto 48px;
+        }
+
+        .hero {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 24px;
+            margin-bottom: 20px;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.4rem);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .hero p,
+        .muted {
+            color: var(--muted);
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            padding: 16px 18px;
+            margin-bottom: 18px;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        input,
+        button {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        input {
+            min-width: 220px;
+        }
+
+        button {
+            cursor: pointer;
+            background: linear-gradient(135deg, rgba(123, 241, 200, 0.22), rgba(111, 184, 255, 0.18));
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .status {
+            margin-left: auto;
+            font-size: 0.95rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .stat-card {
+            padding: 16px;
+        }
+
+        .stat-card .label {
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.72rem;
+        }
+
+        .stat-card .value {
+            display: block;
+            margin-top: 8px;
+            font-size: 1.9rem;
+            font-weight: bold;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 18px;
+        }
+
+        .side-stack {
+            display: grid;
+            gap: 18px;
+            align-content: start;
+        }
+
+        .section {
+            padding: 18px;
+        }
+
+        .section h2 {
+            margin: 0 0 14px;
+            font-size: 1rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .rooms {
+            display: grid;
+            gap: 14px;
+        }
+
+        .room-card {
+            padding: 16px;
+            background: var(--panel-strong);
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .room-header,
+        .row,
+        .player-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .room-header {
+            margin-bottom: 12px;
+        }
+
+        .room-header-main,
+        .room-controls,
+        .player-actions,
+        .field-row,
+        .control-row,
+        .ip-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .room-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.82rem;
+            color: #e7f7ff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .pill.live {
+            background: rgba(123, 241, 200, 0.14);
+            color: var(--accent);
+        }
+
+        .pill.waiting {
+            background: rgba(255, 211, 111, 0.14);
+            color: var(--warning);
+        }
+
+        .pill.warning {
+            background: rgba(255, 127, 127, 0.14);
+            color: var(--danger);
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .detail {
+            padding: 10px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .detail strong {
+            display: block;
+            margin-top: 6px;
+            font-size: 1.12rem;
+        }
+
+        .player-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .player-row {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .player-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            color: var(--muted);
+            font-size: 0.86rem;
+        }
+
+        .player-actions {
+            justify-content: flex-end;
+        }
+
+        .player-main {
+            min-width: 0;
+        }
+
+        .mono {
+            font-family: "Courier New", monospace;
+        }
+
+        .action-button {
+            padding: 8px 10px;
+            font-size: 0.82rem;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .action-button.secondary {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .action-button.warning {
+            background: linear-gradient(135deg, rgba(255, 211, 111, 0.28), rgba(255, 153, 51, 0.24));
+        }
+
+        .action-button.danger {
+            background: linear-gradient(135deg, rgba(255, 127, 127, 0.32), rgba(255, 91, 91, 0.26));
+        }
+
+        .control-card {
+            padding: 14px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            margin-bottom: 14px;
+        }
+
+        .control-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .tiny-note {
+            color: var(--muted);
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+
+        .ip-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .ip-row {
+            justify-content: space-between;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .leaderboard {
+            display: grid;
+            gap: 10px;
+        }
+
+        .leaderboard-row {
+            display: grid;
+            grid-template-columns: 34px 1fr auto;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .empty {
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--muted);
+        }
+
+        .error {
+            color: var(--danger);
+        }
+
+        @media (max-width: 1080px) {
+            .grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .shell {
+                width: min(100% - 20px, 100%);
+                margin-top: 14px;
+            }
+
+            .hero,
+            .toolbar,
+            .room-header,
+            .row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .status {
+                margin-left: 0;
+            }
+
+            .grid,
+            .detail-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .player-row {
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <p class="muted">Internal operations panel</p>
+                <h1>Match Control Deck</h1>
+                <p class="muted">Live visibility into rooms, arenas, players, wave shops, and server health.</p>
+            </div>
+            <div class="panel section">
+                <div id="lastUpdated">Waiting for first refresh...</div>
+                <div class="muted" id="uptimeLabel">Server uptime: --</div>
+            </div>
+        </section>
+
+        <section class="panel toolbar">
+            <div class="pill live">Admin Accounts Only</div>
+            <button id="refreshNow">Refresh now</button>
+            <button id="openAssets" class="secondary">Asset Manager</button>
+            <button id="openForge" class="secondary">Sprite Forge</button>
+            <button id="openBuilder" class="secondary">Sprite Builder</button>
+            <button id="openProgress" class="secondary">Accounts + Leaderboards</button>
+            <div class="status muted" id="statusText">Connecting...</div>
+        </section>
+
+        <section class="grid" id="statsGrid"></section>
+
+        <section class="layout">
+            <div class="panel section">
+                <h2>Rooms</h2>
+                <div class="rooms" id="roomsContainer"></div>
+            </div>
+
+            <div class="side-stack">
+                <div class="panel section">
+                    <h2>Moderation</h2>
+                    <div id="moderationContainer"></div>
+                </div>
+
+                <div class="panel section">
+                    <h2>Leaderboard</h2>
+                    <div class="leaderboard" id="leaderboardContainer"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const statsGrid = document.getElementById('statsGrid');
+        const roomsContainer = document.getElementById('roomsContainer');
+        const moderationContainer = document.getElementById('moderationContainer');
+        const leaderboardContainer = document.getElementById('leaderboardContainer');
+        const statusText = document.getElementById('statusText');
+        const lastUpdated = document.getElementById('lastUpdated');
+        const uptimeLabel = document.getElementById('uptimeLabel');
+        const refreshNowButton = document.getElementById('refreshNow');
+        const openAssetsButton = document.getElementById('openAssets');
+        const openForgeButton = document.getElementById('openForge');
+        const openBuilderButton = document.getElementById('openBuilder');
+        const openProgressButton = document.getElementById('openProgress');
+
+        const AUTH_TOKEN_STORAGE_KEY = 'authToken';
+        const REFRESH_INTERVAL_MS = 2500;
+        let refreshTimer = null;
+        let latestSummary = null;
+
+        function formatNumber(value) {
+            return new Intl.NumberFormat().format(value || 0);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let size = bytes;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+        }
+
+        function formatTokenLabel(value) {
+            return String(value ?? '')
+                .split(/[-_]+/)
+                .filter(Boolean)
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ') || 'Unknown';
+        }
+
+        function formatUpgradeSummary(upgradeLevels = {}) {
+            const upgrades = Object.entries(upgradeLevels || {})
+                .filter(([, level]) => Number(level) > 0)
+                .map(([key, level]) => `${formatTokenLabel(key)} Lv ${level}`);
+            return upgrades.length ? upgrades.join(' • ') : 'Base build';
+        }
+
+        function setStatus(message, isError = false) {
+            statusText.textContent = message;
+            statusText.className = isError ? 'status error' : 'status muted';
+        }
+
+        function getAuthToken() {
+            try {
+                return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function redirectToMain(reason = 'required') {
+            window.location.href = `/?admin=${encodeURIComponent(reason)}`;
+        }
+
+        function getHeaders() {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            const token = getAuthToken();
+            if (token) {
+                headers.Authorization = `Bearer ${token}`;
+            }
+
+            return headers;
+        }
+
+        async function adminRequest(path, options = {}) {
+            const response = await fetch(path, {
+                headers: getHeaders(),
+                cache: 'no-store',
+                credentials: 'same-origin',
+                ...options
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    redirectToMain('required');
+                    throw new Error('Sign in with an admin account to access the admin center.');
+                }
+
+                if (response.status === 403) {
+                    redirectToMain('forbidden');
+                    throw new Error('This account does not have admin access.');
+                }
+
+                let message = `Request failed (${response.status}).`;
+
+                try {
+                    const payload = await response.json();
+                    message = payload.message || payload.error || message;
+                } catch (error) {
+                    // Ignore JSON parsing errors and keep the fallback message.
+                }
+
+                throw new Error(message);
+            }
+
+            if (response.status === 204) {
+                return null;
+            }
+
+            return response.json();
+        }
+
+        function renderStats(summary) {
+            const cards = [
+                ['Clients', summary.totals.connectedClients],
+                ['Rooms', summary.totals.roomCount],
+                ['Active games', summary.totals.activeGames],
+                ['Accounts', summary.totals.userAccounts],
+                ['Shop phases', summary.totals.shopRooms],
+                ['Players', summary.totals.players],
+                ['Spectators', summary.totals.spectators],
+                ['Enemies', summary.totals.enemies],
+                ['Heap used', formatBytes(summary.memory.heapUsed)]
+            ];
+
+            statsGrid.innerHTML = cards.map(([label, value]) => `
+                <article class="panel stat-card">
+                    <span class="label">${label}</span>
+                    <span class="value">${value}</span>
+                </article>
+            `).join('');
+        }
+
+        function renderRooms(rooms) {
+            if (!rooms.length) {
+                roomsContainer.innerHTML = '<div class="empty">No rooms are active right now.</div>';
+                return;
+            }
+
+            roomsContainer.innerHTML = rooms.map(room => `
+                <article class="room-card">
+                    <div class="room-header">
+                        <div class="room-header-main">
+                            <div>
+                                <div class="room-name">${escapeHtml(room.name)}</div>
+                                <div class="muted mono">${escapeHtml(room.id)}</div>
+                            </div>
+                            ${room.locked ? '<span class="pill warning">Room locked</span>' : ''}
+                        </div>
+                        <div class="room-controls">
+                            <span class="pill ${room.gameStarted ? 'live' : 'waiting'}">
+                                ${room.gameStarted ? 'Live match' : 'Lobby'}
+                            </span>
+                            <button
+                                class="action-button secondary"
+                                data-action="watch-room"
+                                data-room-id="${escapeHtml(room.id)}"
+                            >
+                                Watch
+                            </button>
+                            <button
+                                class="action-button ${room.locked ? 'secondary' : 'warning'}"
+                                data-action="toggle-room-lock"
+                                data-room-id="${escapeHtml(room.id)}"
+                                data-locked="${room.locked ? 'true' : 'false'}"
+                            >
+                                ${room.locked ? 'Unlock room' : 'Lock room'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="detail-grid">
+                        <div class="detail">
+                            Players
+                            <strong>${room.playerCount}/${room.maxPlayers}</strong>
+                        </div>
+                        <div class="detail">
+                            Spectators
+                            <strong>${room.spectatorCount}</strong>
+                        </div>
+                        <div class="detail">
+                            Arena
+                            <strong>${escapeHtml(room.arena?.name || 'Unassigned')}</strong>
+                        </div>
+                        <div class="detail">
+                            Wave
+                            <strong>${room.wave}</strong>
+                        </div>
+                        <div class="detail">
+                            Enemies alive
+                            <strong>${room.enemiesAlive}</strong>
+                        </div>
+                        <div class="detail">
+                            Spawned this wave
+                            <strong>${room.enemiesSpawnedThisWave}/${room.maxEnemiesPerWave}</strong>
+                        </div>
+                        <div class="detail">
+                            Bullets
+                            <strong>${room.activeBullets}</strong>
+                        </div>
+                        <div class="detail">
+                            Power-ups
+                            <strong>${room.activePowerUps}</strong>
+                        </div>
+                        <div class="detail">
+                            End votes
+                            <strong>${room.shopEndVote?.votes || 0}/${room.shopEndVote?.required || 0}</strong>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="muted">Host: ${escapeHtml(room.hostName || 'None')}</div>
+                        <div class="muted">Duration: ${room.gameDurationLabel}</div>
+                    </div>
+                    <div class="row">
+                        <div class="muted">Arena theme: ${escapeHtml(formatTokenLabel(room.arena?.themeId))} • Layout: ${escapeHtml(formatTokenLabel(room.arena?.layoutId))}</div>
+                        <div class="muted">Arena props: ${formatNumber(room.arena?.obstacleCount || 0)} obstacles • ${formatNumber(room.arena?.decorCount || 0)} decor</div>
+                    </div>
+                    <div class="row">
+                        <div class="muted">Enemy spawn every ${room.currentEnemySpawnRateLabel}</div>
+                        <div class="muted">${room.shopPhase ? `Shop ends in ${room.shopEndsInLabel} • End vote ${room.shopEndVote?.votes || 0}/${room.shopEndVote?.required || 0}` : 'Combat phase'}</div>
+                    </div>
+
+                    <div class="player-list">
+                        ${room.players.map(player => `
+                            <div class="player-row">
+                                <div class="player-main">
+                                    <strong>${escapeHtml(player.name)}${player.isHost ? ' (Host)' : ''}</strong>
+                                    <div class="player-meta">
+                                        <span>${player.alive ? 'Alive' : 'Down'}</span>
+                                        <span>Weapon: ${escapeHtml(player.currentWeapon)}</span>
+                                        <span>Skin: ${escapeHtml(player.skinTheme)}</span>
+                                        <span>${player.votedToEndMatch ? 'Voted to end' : 'Still in run'}</span>
+                                        <span class="mono">IP ${escapeHtml(player.ipAddress)}</span>
+                                        ${player.ipBlocked ? '<span class="error">Blocked</span>' : ''}
+                                    </div>
+                                </div>
+                                <div class="player-actions">
+                                    <div class="player-meta">
+                                        <span>HP ${player.health}/${player.maxHealth}</span>
+                                        <span>Shield ${player.shield}</span>
+                                        <span>Score ${formatNumber(player.score)}</span>
+                                        <span>$${formatNumber(player.money)}</span>
+                                        <span>${escapeHtml(formatUpgradeSummary(player.upgradeLevels))}</span>
+                                    </div>
+                                    <button
+                                        class="action-button warning"
+                                        data-action="kick-player"
+                                        data-room-id="${escapeHtml(room.id)}"
+                                        data-player-id="${escapeHtml(player.id)}"
+                                        data-player-name="${escapeHtml(player.name)}"
+                                    >
+                                        Kick
+                                    </button>
+                                    <button
+                                        class="action-button danger"
+                                        data-action="${player.ipBlocked ? 'unblock-ip' : 'block-ip'}"
+                                        data-ip-address="${escapeHtml(player.ipAddress)}"
+                                        data-player-name="${escapeHtml(player.name)}"
+                                    >
+                                        ${player.ipBlocked ? 'Unblock IP' : 'Block IP'}
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </article>
+            `).join('');
+        }
+
+        function renderModeration(summary) {
+            const blockedIps = summary.moderation?.blockedIps || [];
+            const serverLocked = Boolean(summary.moderation?.blockNewConnections);
+
+            moderationContainer.innerHTML = `
+                <div class="control-card">
+                    <div class="control-row">
+                        <span class="pill ${serverLocked ? 'warning' : 'live'}">
+                            ${serverLocked ? 'New connections blocked' : 'New connections allowed'}
+                        </span>
+                        <button
+                            class="action-button ${serverLocked ? 'secondary' : 'warning'}"
+                            data-action="toggle-server-lock"
+                            data-locked="${serverLocked ? 'true' : 'false'}"
+                        >
+                            ${serverLocked ? 'Allow connections' : 'Block new connections'}
+                        </button>
+                    </div>
+                    <p class="tiny-note">
+                        This does not close the Windows or router port. It stops new players from joining through the game server while leaving the app running.
+                    </p>
+                </div>
+
+                <div class="control-card">
+                    <div class="field-row">
+                        <input id="manualIpInput" class="mono" type="text" placeholder="Enter IP to block">
+                        <button class="action-button danger" data-action="block-manual-ip">Block IP</button>
+                    </div>
+                    <p class="tiny-note">
+                        Blocking an IP can affect multiple people behind the same network.
+                    </p>
+                    <div class="ip-list">
+                        ${blockedIps.length ? blockedIps.map(ipAddress => `
+                            <div class="ip-row">
+                                <span class="mono">${escapeHtml(ipAddress)}</span>
+                                <button
+                                    class="action-button secondary"
+                                    data-action="unblock-ip"
+                                    data-ip-address="${escapeHtml(ipAddress)}"
+                                >
+                                    Unblock
+                                </button>
+                            </div>
+                        `).join('') : '<div class="empty">No blocked IPs.</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderLeaderboard(entries) {
+            if (!entries.length) {
+                leaderboardContainer.innerHTML = '<div class="empty">No scores recorded yet.</div>';
+                return;
+            }
+
+            leaderboardContainer.innerHTML = entries.map((entry, index) => `
+                <div class="leaderboard-row">
+                    <strong>#${index + 1}</strong>
+                    <div>
+                        <div>${escapeHtml(entry.name)}</div>
+                        <div class="muted">Wave ${entry.wave} • ${escapeHtml(entry.date)}</div>
+                    </div>
+                    <strong>${formatNumber(entry.score)}</strong>
+                </div>
+            `).join('');
+        }
+
+        async function refreshDashboard() {
+            try {
+                const summary = await adminRequest('/api/admin/summary', { method: 'GET' });
+                latestSummary = summary;
+                renderStats(summary);
+                renderRooms(summary.rooms);
+                renderModeration(summary);
+                renderLeaderboard(summary.leaderboard);
+
+                lastUpdated.textContent = `Last updated: ${new Date(summary.generatedAt).toLocaleString()}`;
+                uptimeLabel.textContent = `Server uptime: ${summary.uptimeLabel}`;
+                setStatus(`Admin view active for ${summary.viewer?.username || 'admin'}.`);
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        async function handleRoomAction(action, dataset) {
+            if (action === 'watch-room') {
+                window.open(`/spectator.html?roomId=${encodeURIComponent(dataset.roomId)}`, '_blank', 'noopener');
+                setStatus('Opened spectator view.');
+                return;
+            }
+
+            if (action === 'toggle-room-lock') {
+                const nextLocked = dataset.locked !== 'true';
+                await adminRequest(`/api/admin/rooms/${encodeURIComponent(dataset.roomId)}/lock`, {
+                    method: 'POST',
+                    body: JSON.stringify({ locked: nextLocked })
+                });
+                setStatus(nextLocked ? 'Room locked.' : 'Room unlocked.');
+                return;
+            }
+
+            if (action === 'kick-player') {
+                await adminRequest(`/api/admin/rooms/${encodeURIComponent(dataset.roomId)}/players/${encodeURIComponent(dataset.playerId)}/kick`, {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
+                setStatus(`Kicked ${dataset.playerName || 'player'}.`);
+                return;
+            }
+
+            if (action === 'block-ip' || action === 'unblock-ip') {
+                await handleIpAction(action, dataset.ipAddress, dataset.playerName);
+            }
+        }
+
+        async function handleIpAction(action, ipAddress, playerName = '') {
+            if (!ipAddress) {
+                throw new Error('No IP address was provided.');
+            }
+
+            if (action === 'block-ip') {
+                await adminRequest('/api/admin/ip-blocks', {
+                    method: 'POST',
+                    body: JSON.stringify({ ipAddress, disconnectExisting: true })
+                });
+                setStatus(`Blocked IP ${ipAddress}${playerName ? ` (${playerName})` : ''}.`);
+                return;
+            }
+
+            await adminRequest(`/api/admin/ip-blocks/${encodeURIComponent(ipAddress)}`, {
+                method: 'DELETE'
+            });
+            setStatus(`Unblocked IP ${ipAddress}.`);
+        }
+
+        async function handleModerationAction(action, dataset) {
+            if (action === 'toggle-server-lock') {
+                const nextLocked = dataset.locked !== 'true';
+                await adminRequest('/api/admin/server/connections', {
+                    method: 'POST',
+                    body: JSON.stringify({ blocked: nextLocked })
+                });
+                setStatus(nextLocked ? 'New connections are now blocked.' : 'New connections are now allowed.');
+                return;
+            }
+
+            if (action === 'block-manual-ip') {
+                const input = document.getElementById('manualIpInput');
+                const ipAddress = input?.value.trim();
+                await handleIpAction('block-ip', ipAddress);
+                if (input) {
+                    input.value = '';
+                }
+                return;
+            }
+
+            if (action === 'unblock-ip') {
+                await handleIpAction('unblock-ip', dataset.ipAddress);
+            }
+        }
+
+        function startRefreshLoop() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+            refreshTimer = setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
+        }
+
+        refreshNowButton.addEventListener('click', refreshDashboard);
+        openAssetsButton.addEventListener('click', () => {
+            window.location.href = '/asset-admin.html';
+        });
+        openForgeButton.addEventListener('click', () => {
+            window.location.href = '/sprite-forge.html';
+        });
+        openBuilderButton.addEventListener('click', () => {
+            window.location.href = '/sprite-builder.html';
+        });
+        openProgressButton.addEventListener('click', () => {
+            window.location.href = '/progress-admin.html';
+        });
+
+        roomsContainer.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button) {
+                return;
+            }
+
+            try {
+                await handleRoomAction(button.dataset.action, button.dataset);
+                await refreshDashboard();
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        });
+
+        moderationContainer.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button) {
+                return;
+            }
+
+            try {
+                await handleModerationAction(button.dataset.action, button.dataset);
+                await refreshDashboard();
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        });
+
+        startRefreshLoop();
+        refreshDashboard();
+    </script>
+</body>
+</html>

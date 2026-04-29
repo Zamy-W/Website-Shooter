@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Spectator View</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at top left, rgba(111, 184, 255, 0.14), transparent 24%),
+                radial-gradient(circle at top right, rgba(123, 241, 200, 0.14), transparent 28%),
+                linear-gradient(160deg, #09111a 0%, #101a27 55%, #132131 100%);
+            color: #eef7ff;
+            font-family: Georgia, "Times New Roman", serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px 36px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .subtle {
+            color: #90a7ba;
+        }
+
+        #spectatorStatus {
+            margin: 14px 0 18px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(123, 241, 200, 0.18);
+        }
+
+        .spectator-controls {
+            width: min(860px, 100%);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: end;
+            justify-content: center;
+            margin-bottom: 18px;
+            padding: 16px;
+            border-radius: 18px;
+            background: rgba(7, 13, 20, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.26);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 180px;
+        }
+
+        .control-group label {
+            color: #90a7ba;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .control-group select,
+        .control-group button {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.06);
+            color: #eef7ff;
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        .control-group button {
+            cursor: pointer;
+            background: linear-gradient(135deg, rgba(123, 241, 200, 0.18), rgba(111, 184, 255, 0.2));
+        }
+
+        #gameContainer {
+            position: relative;
+            border: 1px solid rgba(123, 241, 200, 0.2);
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.36);
+        }
+
+        #gameCanvas {
+            display: block;
+            background: #0a0f15;
+        }
+
+        #ui {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 10;
+            background: rgba(7, 13, 20, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 12px 14px;
+            min-width: 190px;
+            backdrop-filter: blur(10px);
+        }
+
+        #ui div {
+            margin-bottom: 6px;
+        }
+
+        #ui div:last-child {
+            margin-bottom: 0;
+        }
+
+        #connectionStatus {
+            margin-top: 14px;
+            color: #90a7ba;
+        }
+
+        .connected {
+            color: #7bf1c8 !important;
+        }
+
+        .disconnected {
+            color: #ff8f8f !important;
+        }
+
+        #lobbyScreen, #waitingRoom {
+            width: min(860px, 100%);
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: 18px;
+            background: rgba(7, 13, 20, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.26);
+        }
+
+        #roomControls, #playerInfo {
+            display: none !important;
+        }
+
+        #playersInRoom {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .player-item {
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 14px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .player-item-empty {
+            justify-content: center;
+            color: #90a7ba;
+        }
+
+        .staging-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #061120;
+        }
+
+        .staging-avatar.player1 { background: linear-gradient(135deg, #7fd4ff, #2d82ff); }
+        .staging-avatar.player2 { background: linear-gradient(135deg, #7dffbd, #1ac97a); }
+        .staging-avatar.player3 { background: linear-gradient(135deg, #da9cff, #9750ff); }
+        .staging-avatar.player4 { background: linear-gradient(135deg, #ffd78c, #ff9933); }
+
+        .staging-player-name {
+            font-weight: bold;
+        }
+
+        .staging-player-meta {
+            font-size: 12px;
+            color: #90a7ba;
+        }
+
+        .staging-tag.host {
+            margin-left: 8px;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: rgba(255, 209, 102, 0.16);
+            color: #ffd883;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+        }
+
+        #leaderboard {
+            display: none;
+            width: min(900px, 100%);
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: 18px;
+            background: rgba(7, 13, 20, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        #shopOverlay,
+        #gameOver,
+        #deathScreen {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Spectator View</h1>
+    <div class="subtle">Admin can watch a room without joining as a player.</div>
+    <div id="spectatorStatus">Preparing spectator session...</div>
+
+    <div class="spectator-controls">
+        <div class="control-group">
+            <label for="spectatorCameraMode">Camera Mode</label>
+            <select id="spectatorCameraMode">
+                <option value="auto">Auto Action</option>
+                <option value="follow">Follow Player</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="spectatorPlayerTarget">Target Player</label>
+            <select id="spectatorPlayerTarget" disabled>
+                <option value="">Auto select</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="spectatorResetCamera">Camera</label>
+            <button id="spectatorResetCamera" type="button">Reset Zoom</button>
+        </div>
+    </div>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div>Players Alive: <span id="health">0/0</span></div>
+            <div>Total Score: <span id="score">0</span></div>
+            <div>Roster: <span id="money">0</span></div>
+            <div>Wave: <span id="wave">1</span></div>
+            <div>Mode: <span id="currentWeapon">Spectator</span></div>
+            <div id="difficultyInfo" style="font-size: 12px; color: #90a7ba; margin-top: 10px;">
+                <div>Enemies: <span id="enemiesRemaining">0</span>/<span id="enemiesTotal">0</span></div>
+                <div>Spawn Rate: <span id="spawnRate">0</span>ms</div>
+            </div>
+            <div style="font-size: 11px; color: #90a7ba; margin-top: 10px;">
+                Zoom: mouse wheel or + / - / 0
+            </div>
+            <input type="checkbox" id="autoShootToggle" hidden>
+        </div>
+    </div>
+
+    <div id="connectionStatus">Connecting to server...</div>
+
+    <div id="lobbyScreen">
+        <div class="subtle">Spectator staging view</div>
+        <h2 id="currentRoomName">Room</h2>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; color: #90a7ba;">
+            <div>Room Code: <span id="roomCodeValue">----</span></div>
+            <div id="roomHostLabel">Host: Waiting</div>
+            <div id="stagingStatus">0/4 operators in staging</div>
+        </div>
+        <p id="stagingHint" class="subtle">Waiting for room state...</p>
+        <div id="roomControls"></div>
+        <div id="playerInfo"></div>
+    </div>
+
+    <div id="waitingRoom" style="display: none;">
+        <div class="subtle">Visible room roster</div>
+        <div id="playersInRoom"></div>
+        <button id="startGameButton" type="button" style="display: none;">Spectating</button>
+    </div>
+
+    <div id="leaderboard">
+        <h2>Leaderboard</h2>
+        <div id="leaderboardList"></div>
+        <button onclick="closeLeaderboard()">Close</button>
+    </div>
+
+    <div id="gameOver">
+        <span id="finalScore">0</span>
+        <span id="finalWave">0</span>
+    </div>
+
+    <div id="deathScreen">
+        <span id="currentScore">0</span>
+        <span id="currentWave">0</span>
+    </div>
+
+    <div id="shopOverlay">
+        <div class="shop-modal">
+            <div class="shop-header"></div>
+            <div class="shop-meta">
+                <div class="shop-pill">Cash: <span id="shopCurrency">0</span></div>
+                <div class="shop-pill">Next wave in <span id="shopTimer">0s</span></div>
+            </div>
+            <div class="shop-countdown">
+                <span id="shopCountdownLabel"></span>
+                <strong id="shopTimerLarge"></strong>
+                <div class="shop-progress">
+                    <div id="shopProgressFill"></div>
+                </div>
+            </div>
+            <div id="shopNotice"></div>
+            <div id="shopUpgrades"></div>
+        </div>
+    </div>
+
+    <div id="topPlayersList" hidden></div>
+    <div id="leaderboardListHidden" hidden></div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        window.GAME_BOOTSTRAP = {
+            spectator: true,
+            roomId: params.get('roomId') || '',
+            spectatorLabel: 'Admin spectator'
+        };
+
+        if (!window.GAME_BOOTSTRAP.roomId) {
+            const banner = document.getElementById('spectatorStatus');
+            if (banner) {
+                banner.textContent = 'Missing roomId in URL.';
+            }
+        }
+    </script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/AssetManager.js"></script>
+    <script src="js/ParticleSystem.js"></script>
+    <script src="js/UIManager.js"></script>
+    <script src="js/CameraSystem.js"></script>
+    <script src="js/SpriteRenderer.js"></script>
+    <script src="js/ParallaxBackground.js"></script>
+    <script src="multiplayer-game.js"></script>
+</body>
+</html>

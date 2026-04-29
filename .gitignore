@@ -1,0 +1,8 @@
+node_modules/
+data/users.json
+data/leaderboard.json
+data/auth-secret.txt
+data/game-asset-metadata.json
+.DS_Store
+*.env
+*.env.local

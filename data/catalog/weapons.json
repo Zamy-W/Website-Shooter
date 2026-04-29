@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "defaultWeaponId": "pistol",
+  "weapons": [
+    {
+      "id": "pistol",
+      "label": "Pistol",
+      "description": "Standard sidearm issued to every new operator.",
+      "cost": 0,
+      "sortOrder": 10,
+      "behaviorId": "projectile",
+      "slot": "sidearm",
+      "artPath": "weapons/pistol.svg",
+      "playable": true,
+      "stats": {
+        "pelletCount": 1,
+        "damage": 40,
+        "range": 300,
+        "spread": 0.05,
+        "cooldown": 300,
+        "speed": 600,
+        "magazineSize": 12,
+        "reloadTime": 1100,
+        "chargeTime": 0
+      },
+      "fx": {
+        "recoilForce": 5,
+        "muzzleFlashDuration": 80,
+        "shellEjection": true,
+        "energyBeam": false,
+        "sound": "pistol_fire",
+        "impactColor": "#57ff8c",
+        "hitRadius": 3
+      },
+      "presentation": {
+        "crosshairColor": "#00ff00",
+        "spreadGuideColor": "rgba(0, 255, 0, 0.2)",
+        "holdOffset": 18,
+        "muzzleOffset": 16,
+        "ejectBackOffset": 5,
+        "ejectSideOffset": -7,
+        "shellEjectAngleBias": -0.08,
+        "smokeTrailScale": 0,
+        "showSpreadIndicator": false
+      }
+    },
+    {
+      "id": "shotgun",
+      "label": "Shotgun",
+      "description": "Heavy close-range option with a brutal blast pattern.",
+      "cost": 320,
+      "sortOrder": 20,
+      "behaviorId": "spread",
+      "slot": "primary",
+      "artPath": "weapons/shotgun.svg",
+      "playable": true,
+      "stats": {
+        "pelletCount": 8,
+        "damage": 25,
+        "range": 200,
+        "spread": 0.3,
+        "cooldown": 800,
+        "speed": 800,
+        "magazineSize": 6,
+        "reloadTime": 1450,
+        "chargeTime": 0
+      },
+      "fx": {
+        "recoilForce": 15,
+        "muzzleFlashDuration": 100,
+        "shellEjection": true,
+        "energyBeam": false,
+        "sound": "shotgun_fire",
+        "impactColor": "#ff9f43",
+        "hitRadius": 3
+      },
+      "presentation": {
+        "crosshairColor": "#ff8800",
+        "spreadGuideColor": "rgba(255, 136, 0, 0.3)",
+        "holdOffset": 20,
+        "muzzleOffset": 22,
+        "ejectBackOffset": 8,
+        "ejectSideOffset": -10,
+        "shellEjectAngleBias": -0.18,
+        "smokeTrailScale": 0.8,
+        "showSpreadIndicator": true
+      }
+    },
+    {
+      "id": "rifle",
+      "label": "Rifle",
+      "description": "Reliable high-pressure weapon for sustained fire.",
+      "cost": 460,
+      "sortOrder": 30,
+      "behaviorId": "projectile",
+      "slot": "primary",
+      "artPath": "weapons/rifle.svg",
+      "playable": true,
+      "stats": {
+        "pelletCount": 1,
+        "damage": 60,
+        "range": 400,
+        "spread": 0.02,
+        "cooldown": 150,
+        "speed": 1000,
+        "magazineSize": 24,
+        "reloadTime": 1600,
+        "chargeTime": 0
+      },
+      "fx": {
+        "recoilForce": 8,
+        "muzzleFlashDuration": 60,
+        "shellEjection": true,
+        "energyBeam": false,
+        "sound": "rifle_fire",
+        "impactColor": "#63b3ff",
+        "hitRadius": 3
+      },
+      "presentation": {
+        "crosshairColor": "#0099ff",
+        "spreadGuideColor": "rgba(0, 153, 255, 0.24)",
+        "holdOffset": 21,
+        "muzzleOffset": 20,
+        "ejectBackOffset": 7,
+        "ejectSideOffset": -8,
+        "shellEjectAngleBias": -0.1,
+        "smokeTrailScale": 0.8,
+        "showSpreadIndicator": false
+      }
+    },
+    {
+      "id": "sniper",
+      "label": "Sniper Laser",
+      "description": "Charge a single blue laser round and crack long lanes with heavy recoil.",
+      "cost": 620,
+      "sortOrder": 40,
+      "behaviorId": "charge_shot",
+      "slot": "primary",
+      "artPath": "weapons/sniper.svg",
+      "playable": true,
+      "stats": {
+        "pelletCount": 1,
+        "damage": 300,
+        "range": 900,
+        "spread": 0.008,
+        "cooldown": 1500,
+        "speed": 1900,
+        "magazineSize": 3,
+        "reloadTime": 2100,
+        "chargeTime": 420
+      },
+      "fx": {
+        "recoilForce": 18,
+        "muzzleFlashDuration": 140,
+        "shellEjection": false,
+        "energyBeam": true,
+        "sound": "sniper_laser",
+        "impactColor": "#67c9ff",
+        "hitRadius": 9
+      },
+      "presentation": {
+        "crosshairColor": "#67c9ff",
+        "spreadGuideColor": "rgba(103, 201, 255, 0.2)",
+        "holdOffset": 24,
+        "muzzleOffset": 28,
+        "ejectBackOffset": 0,
+        "ejectSideOffset": 0,
+        "shellEjectAngleBias": -0.04,
+        "smokeTrailScale": 0,
+        "showSpreadIndicator": false
+      }
+    }
+  ]
+}

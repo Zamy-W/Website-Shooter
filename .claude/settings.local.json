@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(timeout 5 node server-new.js)",
+      "Bash(node -e \"require\\('./server/assets'\\).createDefaultGameAssetMetadataStore; require\\('./server/leaderboard'\\).createDefaultLeaderboardStore; require\\('./server/leaderboard'\\).LEADERBOARD_DB_PATH; console.log\\('ok'\\)\")",
+      "Bash(timeout 6 node server-new.js)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

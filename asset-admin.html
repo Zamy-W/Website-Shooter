@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Control Deck</title>
+    <style>
+        :root {
+            --bg: #08111a;
+            --panel: rgba(9, 17, 27, 0.92);
+            --panel-strong: rgba(13, 23, 35, 0.98);
+            --border: rgba(116, 181, 255, 0.18);
+            --text: #ecf7ff;
+            --muted: #8ba3b7;
+            --accent: #7bf1c8;
+            --accent-2: #6fb8ff;
+            --danger: #ff8f8f;
+            --warning: #ffd36f;
+            --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(123, 241, 200, 0.14), transparent 28%),
+                radial-gradient(circle at top right, rgba(111, 184, 255, 0.16), transparent 30%),
+                linear-gradient(160deg, #071018 0%, #0d1824 50%, #111f2e 100%);
+        }
+
+        .shell {
+            width: min(1320px, calc(100% - 32px));
+            margin: 24px auto 42px;
+        }
+
+        .hero {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 24px;
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.2rem);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .toolbar,
+        .subtoolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            padding: 16px 18px;
+            margin-bottom: 16px;
+        }
+
+        .subtoolbar {
+            justify-content: space-between;
+        }
+
+        input,
+        button,
+        select,
+        textarea {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 92px;
+            resize: vertical;
+        }
+
+        input[type="password"] {
+            min-width: 220px;
+        }
+
+        input[type="file"] {
+            max-width: 280px;
+        }
+
+        button {
+            cursor: pointer;
+            background: linear-gradient(135deg, rgba(123, 241, 200, 0.22), rgba(111, 184, 255, 0.18));
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, rgba(255, 143, 143, 0.28), rgba(255, 91, 91, 0.24));
+        }
+
+        button.warning {
+            background: linear-gradient(135deg, rgba(255, 211, 111, 0.22), rgba(255, 167, 61, 0.18));
+        }
+
+        button:disabled,
+        input:disabled,
+        select:disabled,
+        textarea:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-left: auto;
+            font-size: 0.95rem;
+        }
+
+        .breadcrumbs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .breadcrumb {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+            gap: 18px;
+        }
+
+        .side-stack {
+            display: grid;
+            gap: 18px;
+            align-content: start;
+        }
+
+        .section {
+            padding: 18px;
+        }
+
+        .section h2 {
+            margin: 0 0 14px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 1rem;
+        }
+
+        .asset-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .asset-card {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 16px;
+            align-items: center;
+            padding: 14px;
+            border-radius: 16px;
+            background: var(--panel-strong);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .asset-card.selected {
+            border-color: rgba(123, 241, 200, 0.34);
+            box-shadow: inset 0 0 0 1px rgba(123, 241, 200, 0.18);
+        }
+
+        .asset-name {
+            font-size: 1.05rem;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .asset-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 0.84rem;
+        }
+
+        .asset-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .pill.folder {
+            color: var(--warning);
+            background: rgba(255, 211, 111, 0.12);
+        }
+
+        .pill.file {
+            color: var(--accent-2);
+            background: rgba(111, 184, 255, 0.12);
+        }
+
+        .pill.game {
+            color: var(--accent);
+            background: rgba(123, 241, 200, 0.12);
+        }
+
+        .safe-banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            border-radius: 16px;
+            background: rgba(255, 211, 111, 0.1);
+            border: 1px solid rgba(255, 211, 111, 0.18);
+        }
+
+        .preview-shell {
+            display: grid;
+            gap: 14px;
+        }
+
+        .preview-box {
+            min-height: 260px;
+            border-radius: 16px;
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 18px;
+        }
+
+        .preview-box img {
+            max-width: 100%;
+            max-height: 420px;
+            object-fit: contain;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .mono {
+            font-family: "Courier New", monospace;
+        }
+
+        .empty {
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--muted);
+        }
+
+        .note-box {
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--muted);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .form-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .field-row {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        label.field {
+            display: grid;
+            gap: 8px;
+            font-size: 0.92rem;
+        }
+
+        label.field span {
+            color: var(--muted);
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .preview-summary {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .tiny-note {
+            color: var(--muted);
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+
+        .advanced-disabled {
+            opacity: 0.65;
+        }
+
+        .error {
+            color: var(--danger);
+        }
+
+        @media (max-width: 1080px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .shell {
+                width: min(100% - 20px, 100%);
+            }
+
+            .hero,
+            .toolbar,
+            .subtoolbar,
+            .asset-card,
+            .safe-banner {
+                flex-direction: column;
+                grid-template-columns: 1fr;
+                align-items: flex-start;
+            }
+
+            .field-row {
+                grid-template-columns: 1fr;
+            }
+
+            .status {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <div class="muted">Internal content tooling</div>
+                <h1>Asset Control Deck</h1>
+                <div class="muted">Import new game-ready assets safely, set loadout costs, and only unlock destructive file actions when you actually need them.</div>
+            </div>
+            <div class="panel section">
+                <div id="assetSummary">Game asset catalog</div>
+                <div class="muted" id="assetCount">Waiting for first load...</div>
+            </div>
+        </section>
+
+        <section class="panel toolbar">
+            <div class="pill">Admin Accounts Only</div>
+            <button id="refreshNow">Refresh</button>
+            <button id="backToAdmin" class="secondary">Back To Admin</button>
+            <button id="openForge" class="secondary">Sprite Forge</button>
+            <button id="openBuilder" class="secondary">Sprite Builder</button>
+            <button id="managementModeButton" class="warning">Enable File Management</button>
+            <div class="status muted" id="statusText">Connecting...</div>
+        </section>
+
+        <section class="panel subtoolbar">
+            <div class="breadcrumbs" id="breadcrumbs"></div>
+            <div class="muted mono" id="currentDirectoryLabel">assets/</div>
+        </section>
+
+        <section class="layout">
+            <div class="panel section">
+                <h2>Game Asset Library</h2>
+                <div class="safe-banner">
+                    <div>
+                        <strong id="managementHeadline">Safe browse mode is on.</strong>
+                        <div class="tiny-note" id="managementNote">Previewing and guided importing are safe. Rename, raw upload, folder creation, and delete stay disabled until you explicitly unlock file management.</div>
+                    </div>
+                    <div class="pill">Safer by default</div>
+                </div>
+                <div class="subtoolbar" style="padding: 0 0 14px; margin: 0;">
+                    <div class="muted" id="directoryStats">0 entries</div>
+                </div>
+                <div class="asset-grid" id="assetList"></div>
+            </div>
+
+            <div class="side-stack">
+                <section class="panel section">
+                    <h2>Quick Import</h2>
+                    <div class="note-box" style="margin-bottom: 14px;">
+                        Add SVG assets through this guided form instead of raw file upload. Player skins appear in the loadout shop, enemy sprites join the enemy pool, and weapon art goes into the weapon asset library.
+                    </div>
+                    <div class="form-grid">
+                        <div class="field-row">
+                            <label class="field">
+                                <span>Asset role</span>
+                                <select id="importAssetKind">
+                                    <option value="playerSkin">Player Skin</option>
+                                    <option value="enemySprite">Enemy Sprite</option>
+                                    <option value="weaponArt">Weapon Art</option>
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span>Unlock cost</span>
+                                <input id="importAssetCost" type="number" min="0" step="1" value="0">
+                            </label>
+                        </div>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>Display name</span>
+                                <input id="importAssetLabel" type="text" placeholder="Example: Crimson Ranger">
+                            </label>
+                            <label class="field">
+                                <span>Optional file id</span>
+                                <input id="importAssetSlug" type="text" placeholder="Example: crimson-ranger">
+                            </label>
+                        </div>
+                        <label class="field">
+                            <span>Description</span>
+                            <textarea id="importAssetDescription" placeholder="Short note for future you."></textarea>
+                        </label>
+                        <label class="field">
+                            <span>SVG file</span>
+                            <input id="importAssetFile" type="file" accept=".svg,image/svg+xml">
+                        </label>
+                        <label class="field">
+                            <span>Import behavior</span>
+                            <select id="importOverwrite">
+                                <option value="false">Do not overwrite existing file</option>
+                                <option value="true">Overwrite if name already exists</option>
+                            </select>
+                        </label>
+                        <div class="form-actions">
+                            <button id="importAssetButton">Import Game Asset</button>
+                            <div class="tiny-note" id="importHint">Player skins are saved into `assets/sprites` and use this cost in the loadout shop.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel section">
+                    <h2>Preview And Asset Settings</h2>
+                    <div class="preview-shell">
+                        <div class="preview-box" id="previewBox">
+                            <div class="muted">Select a file to preview it here.</div>
+                        </div>
+                        <div id="previewSummary" class="empty">No asset selected.</div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 14px;">
+                        <label class="field">
+                            <span>Selected path</span>
+                            <input id="metadataPath" type="text" readonly value="No asset selected">
+                        </label>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>Game role</span>
+                                <input id="metadataCategory" type="text" readonly value="Not selected">
+                            </label>
+                            <label class="field">
+                                <span>Unlock cost</span>
+                                <input id="metadataCost" type="number" min="0" step="1" value="0" disabled>
+                            </label>
+                        </div>
+                        <label class="field">
+                            <span>Display name</span>
+                            <input id="metadataLabel" type="text" placeholder="Display name" disabled>
+                        </label>
+                        <label class="field">
+                            <span>Description</span>
+                            <textarea id="metadataDescription" placeholder="Optional description" disabled></textarea>
+                        </label>
+                        <div class="form-actions">
+                            <button id="saveMetadataButton" disabled>Save Asset Settings</button>
+                            <a id="openRawAssetLink" href="#" target="_blank" rel="noopener" class="tiny-note" style="color: #7bf1c8; text-decoration: none; display: none;">Open raw asset</a>
+                        </div>
+                        <div class="tiny-note" id="metadataHint">Select a file to edit how it appears in the game asset catalog.</div>
+                    </div>
+                </section>
+
+                <section class="panel section" id="advancedTools">
+                    <h2>Advanced File Tools</h2>
+                    <div class="note-box" style="margin-bottom: 14px;">
+                        These tools are intentionally separated from quick import because they can rename, overwrite, or remove files in ways the game may not expect.
+                    </div>
+                    <div class="form-grid">
+                        <label class="field">
+                            <span>Raw file upload</span>
+                            <input id="uploadInput" type="file">
+                        </label>
+                        <div class="form-actions">
+                            <button id="uploadButton">Upload Raw File</button>
+                            <button id="createFolderButton" class="secondary">Create Folder</button>
+                        </div>
+                        <div class="tiny-note">Delete is only available from the file list while file management is enabled, and it requires typing the exact file name to confirm.</div>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const AUTH_TOKEN_STORAGE_KEY = 'authToken';
+        const refreshNowButton = document.getElementById('refreshNow');
+        const backToAdminButton = document.getElementById('backToAdmin');
+        const openForgeButton = document.getElementById('openForge');
+        const openBuilderButton = document.getElementById('openBuilder');
+        const managementModeButton = document.getElementById('managementModeButton');
+        const statusText = document.getElementById('statusText');
+        const breadcrumbs = document.getElementById('breadcrumbs');
+        const currentDirectoryLabel = document.getElementById('currentDirectoryLabel');
+        const assetList = document.getElementById('assetList');
+        const previewBox = document.getElementById('previewBox');
+        const previewSummary = document.getElementById('previewSummary');
+        const assetSummary = document.getElementById('assetSummary');
+        const assetCount = document.getElementById('assetCount');
+        const directoryStats = document.getElementById('directoryStats');
+        const managementHeadline = document.getElementById('managementHeadline');
+        const managementNote = document.getElementById('managementNote');
+        const advancedTools = document.getElementById('advancedTools');
+
+        const importAssetKind = document.getElementById('importAssetKind');
+        const importAssetLabel = document.getElementById('importAssetLabel');
+        const importAssetSlug = document.getElementById('importAssetSlug');
+        const importAssetCost = document.getElementById('importAssetCost');
+        const importAssetDescription = document.getElementById('importAssetDescription');
+        const importAssetFile = document.getElementById('importAssetFile');
+        const importOverwrite = document.getElementById('importOverwrite');
+        const importAssetButton = document.getElementById('importAssetButton');
+        const importHint = document.getElementById('importHint');
+
+        const metadataPath = document.getElementById('metadataPath');
+        const metadataCategory = document.getElementById('metadataCategory');
+        const metadataLabel = document.getElementById('metadataLabel');
+        const metadataCost = document.getElementById('metadataCost');
+        const metadataDescription = document.getElementById('metadataDescription');
+        const saveMetadataButton = document.getElementById('saveMetadataButton');
+        const metadataHint = document.getElementById('metadataHint');
+        const openRawAssetLink = document.getElementById('openRawAssetLink');
+
+        const uploadInput = document.getElementById('uploadInput');
+        const uploadButton = document.getElementById('uploadButton');
+        const createFolderButton = document.getElementById('createFolderButton');
+
+        let currentDirectory = '';
+        let currentEntries = [];
+        let selectedAsset = null;
+        let fileManagementEnabled = false;
+        let gameAssetCatalog = { skins: [], enemySprites: [], weapons: [] };
+        let gameAssetMetadata = {};
+        let gameAssetInfoByPath = new Map();
+        let lastAutoSlug = '';
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes && bytes !== 0) {
+                return 'Unknown size';
+            }
+
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let size = bytes;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+        }
+
+        function formatNumber(value) {
+            return new Intl.NumberFormat().format(Number(value) || 0);
+        }
+
+        function humanizeName(value) {
+            return String(value || '')
+                .replace(/\.[^.]+$/, '')
+                .replace(/[-_]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, (match) => match.toUpperCase()) || 'Untitled';
+        }
+
+        function createSlug(value) {
+            return String(value || '')
+                .toLowerCase()
+                .replace(/\.[^.]+$/, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+
+        function inferGameAssetCategory(relativePath = '') {
+            const normalizedPath = String(relativePath || '').replace(/\\/g, '/').toLowerCase();
+            if (normalizedPath.startsWith('weapons/')) {
+                return 'weaponArt';
+            }
+            if (normalizedPath.startsWith('sprites/')) {
+                return normalizedPath.includes('enemy') ? 'enemySprite' : 'playerSkin';
+            }
+            return 'genericAsset';
+        }
+
+        function formatCategoryLabel(category) {
+            const labels = {
+                playerSkin: 'Player Skin',
+                enemySprite: 'Enemy Sprite',
+                weaponArt: 'Weapon Art',
+                genericAsset: 'Generic Asset'
+            };
+            return labels[category] || humanizeName(category);
+        }
+
+        function getCategoryHint(category) {
+            if (category === 'playerSkin') {
+                return 'Player skins appear in the loadout shop. Unlock cost controls how many permanent credits are needed to own this style.';
+            }
+            if (category === 'enemySprite') {
+                return 'Enemy sprites join the live enemy pool automatically. Cost is stored for catalog consistency, but is not currently used by gameplay.';
+            }
+            if (category === 'weaponArt') {
+                return 'Weapon art is tracked in the asset catalog here. New weapon behavior still needs gameplay code or config if it is a brand-new weapon.';
+            }
+            return 'This file lives in assets, but only files in the game asset folders directly affect the runtime asset catalog.';
+        }
+
+        function setStatus(message, isError = false) {
+            statusText.textContent = message;
+            statusText.className = isError ? 'status error' : 'status muted';
+        }
+
+        function getAuthToken() {
+            try {
+                return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function redirectToMain(reason = 'required') {
+            window.location.href = `/?admin=${encodeURIComponent(reason)}`;
+        }
+
+        function getHeaders(includeJson = true) {
+            const headers = {};
+            if (includeJson) {
+                headers['Content-Type'] = 'application/json';
+            }
+            const token = getAuthToken();
+            if (token) {
+                headers.Authorization = `Bearer ${token}`;
+            }
+            return headers;
+        }
+
+        async function adminRequest(url, options = {}) {
+            const response = await fetch(url, {
+                headers: {
+                    ...getHeaders(options.body !== undefined),
+                    ...(options.headers || {})
+                },
+                cache: 'no-store',
+                credentials: 'same-origin',
+                ...options
+            });
+
+            const text = await response.text();
+            let payload = null;
+            try {
+                payload = text ? JSON.parse(text) : null;
+            } catch (error) {
+                payload = null;
+            }
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    redirectToMain('required');
+                    throw new Error('Sign in with an admin account to access the asset manager.');
+                }
+
+                if (response.status === 403) {
+                    redirectToMain('forbidden');
+                    throw new Error('This account does not have admin access.');
+                }
+
+                throw new Error(payload?.message || payload?.error || `Request failed (${response.status}).`);
+            }
+
+            return payload;
+        }
+
+        function rebuildGameAssetIndex() {
+            gameAssetInfoByPath = new Map();
+            const groups = [
+                ...(Array.isArray(gameAssetCatalog.skins) ? gameAssetCatalog.skins : []),
+                ...(Array.isArray(gameAssetCatalog.enemySprites) ? gameAssetCatalog.enemySprites : []),
+                ...(Array.isArray(gameAssetCatalog.weapons) ? gameAssetCatalog.weapons : [])
+            ];
+
+            groups.forEach((entry) => {
+                if (!entry?.relativePath) {
+                    return;
+                }
+
+                gameAssetInfoByPath.set(entry.relativePath, {
+                    ...entry,
+                    relativePath: entry.relativePath,
+                    category: entry.category || inferGameAssetCategory(entry.relativePath)
+                });
+            });
+
+            Object.entries(gameAssetMetadata).forEach(([relativePath, entry]) => {
+                const existing = gameAssetInfoByPath.get(relativePath) || {
+                    relativePath,
+                    label: humanizeName(relativePath.split('/').pop() || ''),
+                    description: '',
+                    cost: 0,
+                    category: inferGameAssetCategory(relativePath)
+                };
+
+                gameAssetInfoByPath.set(relativePath, {
+                    ...existing,
+                    ...entry,
+                    relativePath,
+                    category: entry?.category || existing.category || inferGameAssetCategory(relativePath)
+                });
+            });
+        }
+
+        function applyCatalogPayload(payload) {
+            if (!payload) {
+                return;
+            }
+
+            gameAssetCatalog = {
+                skins: Array.isArray(payload.skins) ? payload.skins : [],
+                enemySprites: Array.isArray(payload.enemySprites) ? payload.enemySprites : [],
+                weapons: Array.isArray(payload.weapons) ? payload.weapons : [],
+                defaultSkinId: payload.defaultSkinId || ''
+            };
+            gameAssetMetadata = payload.metadata || {};
+            rebuildGameAssetIndex();
+            renderCatalogSummary();
+        }
+
+        function getGameAssetInfo(relativePath = '') {
+            const normalizedPath = String(relativePath || '').replace(/\\/g, '/');
+            return gameAssetInfoByPath.get(normalizedPath) || {
+                relativePath: normalizedPath,
+                label: humanizeName(normalizedPath.split('/').pop() || ''),
+                description: '',
+                cost: 0,
+                category: inferGameAssetCategory(normalizedPath)
+            };
+        }
+
+        function renderCatalogSummary() {
+            const skins = Array.isArray(gameAssetCatalog.skins) ? gameAssetCatalog.skins : [];
+            const enemySprites = Array.isArray(gameAssetCatalog.enemySprites) ? gameAssetCatalog.enemySprites : [];
+            const weapons = Array.isArray(gameAssetCatalog.weapons) ? gameAssetCatalog.weapons : [];
+            const pricedCount = Array.from(gameAssetInfoByPath.values())
+                .filter((entry) => Number(entry?.cost || 0) > 0)
+                .length;
+
+            assetSummary.textContent = `${formatNumber(skins.length)} skins | ${formatNumber(enemySprites.length)} enemy sprites | ${formatNumber(weapons.length)} weapon assets`;
+            assetCount.textContent = `${formatNumber(Object.keys(gameAssetMetadata).length)} metadata overrides | ${formatNumber(pricedCount)} priced assets`;
+        }
+
+        function setManagementMode(enabled) {
+            fileManagementEnabled = Boolean(enabled);
+            managementModeButton.textContent = fileManagementEnabled ? 'Disable File Management' : 'Enable File Management';
+            managementModeButton.className = fileManagementEnabled ? 'danger' : 'warning';
+            managementHeadline.textContent = fileManagementEnabled ? 'File management is unlocked.' : 'Safe browse mode is on.';
+            managementNote.textContent = fileManagementEnabled
+                ? 'Rename, raw upload, folder creation, and delete are enabled. Delete still requires typing the exact asset name to confirm.'
+                : 'Previewing and guided importing are safe. Rename, raw upload, folder creation, and delete stay disabled until you explicitly unlock file management.';
+            advancedTools.classList.toggle('advanced-disabled', !fileManagementEnabled);
+            uploadInput.disabled = !fileManagementEnabled;
+            uploadButton.disabled = !fileManagementEnabled;
+            createFolderButton.disabled = !fileManagementEnabled;
+            renderEntries(currentEntries);
+        }
+
+        function setMetadataFormEnabled(enabled) {
+            metadataCost.disabled = !enabled;
+            metadataLabel.disabled = !enabled;
+            metadataDescription.disabled = !enabled;
+            saveMetadataButton.disabled = !enabled;
+        }
+
+        function renderBreadcrumbs(items) {
+            breadcrumbs.innerHTML = items.map((item) => `
+                <button class="breadcrumb secondary" data-action="open-dir" data-dir="${escapeHtml(item.relativePath || '')}">
+                    ${escapeHtml(item.name || 'assets')}
+                </button>
+            `).join('');
+        }
+
+        function renderPreview(asset) {
+            selectedAsset = asset && asset.type === 'file' ? asset : null;
+            {
+                if (!selectedAsset) {
+                    previewBox.innerHTML = '<div class="muted">Select a file to preview it here.</div>';
+                    previewSummary.innerHTML = '<div class="empty">No asset selected.</div>';
+                    metadataPath.value = 'No asset selected';
+                    metadataCategory.value = 'Not selected';
+                    metadataCost.value = 0;
+                    metadataLabel.value = '';
+                    metadataDescription.value = '';
+                    metadataHint.textContent = 'Select a file to edit how it appears in the game asset catalog.';
+                    openRawAssetLink.style.display = 'none';
+                    openRawAssetLink.removeAttribute('href');
+                    setMetadataFormEnabled(false);
+                    return;
+                }
+
+                const info = getGameAssetInfo(selectedAsset.relativePath);
+                const category = info.category || inferGameAssetCategory(selectedAsset.relativePath);
+                const cost = Math.max(0, Math.round(Number(info.cost) || 0));
+                const label = info.label || humanizeName(selectedAsset.name);
+                const description = info.description || '';
+                const isPreviewableImage = /\.(svg|png|jpe?g|gif|webp)$/i.test(selectedAsset.name);
+                previewBox.innerHTML = isPreviewableImage
+                    ? `<img alt="${escapeHtml(selectedAsset.name)}" src="${escapeHtml(selectedAsset.publicUrl || '')}">`
+                    : '<div class="muted">Preview is available for common image formats and SVG files.</div>';
+
+                previewSummary.innerHTML = `
+                    <div><strong>${escapeHtml(label)}</strong></div>
+                    <div class="muted mono">${escapeHtml(selectedAsset.relativePath)}</div>
+                    <div class="tiny-note">${escapeHtml(formatCategoryLabel(category))} | Cost ${escapeHtml(String(cost))}</div>
+                    <div class="tiny-note">${escapeHtml(formatBytes(selectedAsset.size))} | Updated ${escapeHtml(new Date(selectedAsset.modifiedAt).toLocaleString())}</div>
+                    ${description ? `<div class="tiny-note">${escapeHtml(description)}</div>` : ''}
+                `;
+
+                metadataPath.value = selectedAsset.relativePath;
+                metadataCategory.value = formatCategoryLabel(category);
+                metadataCost.value = cost;
+                metadataLabel.value = label;
+                metadataDescription.value = description;
+                metadataHint.textContent = getCategoryHint(category);
+                setMetadataFormEnabled(true);
+
+                if (selectedAsset.publicUrl) {
+                    openRawAssetLink.href = selectedAsset.publicUrl;
+                    openRawAssetLink.style.display = 'inline-flex';
+                } else {
+                    openRawAssetLink.style.display = 'none';
+                    openRawAssetLink.removeAttribute('href');
+                }
+                return;
+            }
+        }
+
+        function renderEntries(entries) {
+            {
+                currentEntries = Array.isArray(entries) ? entries : [];
+                directoryStats.textContent = `${currentEntries.length} ${currentEntries.length === 1 ? 'entry' : 'entries'}`;
+
+                if (!currentEntries.length) {
+                    assetList.innerHTML = '<div class="empty">This folder is empty.</div>';
+                    renderPreview(null);
+                    return;
+                }
+
+                assetList.innerHTML = currentEntries.map((entry) => {
+                    const isSelected = entry.relativePath === selectedAsset?.relativePath;
+                    const info = entry.type === 'file' ? getGameAssetInfo(entry.relativePath) : null;
+                    const hasMetadata = Boolean(gameAssetMetadata[entry.relativePath]);
+                    const showGameBadge = Boolean(info && (info.category !== 'genericAsset' || hasMetadata));
+                    const showCostBadge = Boolean(info && (showGameBadge || Number(info.cost || 0) > 0));
+                    const catalogLabel = info?.label && info.label !== humanizeName(entry.name) ? info.label : '';
+
+                    return `
+                        <article class="asset-card${isSelected ? ' selected' : ''}">
+                            <div>
+                                <div class="asset-name">${escapeHtml(entry.name)}</div>
+                                ${catalogLabel ? `<div class="tiny-note">${escapeHtml(catalogLabel)}</div>` : ''}
+                                <div class="asset-meta">
+                                    <span class="pill ${entry.type === 'directory' ? 'folder' : 'file'}">${entry.type === 'directory' ? 'Folder' : 'File'}</span>
+                                    ${showGameBadge ? `<span class="pill game">${escapeHtml(formatCategoryLabel(info.category))}</span>` : ''}
+                                    ${showCostBadge ? `<span class="pill game">Cost ${escapeHtml(String(Math.max(0, Math.round(Number(info.cost) || 0))))}</span>` : ''}
+                                    <span class="mono">${escapeHtml(entry.relativePath || 'assets')}</span>
+                                    ${entry.type === 'file' ? `<span>${escapeHtml(formatBytes(entry.size))}</span>` : ''}
+                                    <span>${escapeHtml(new Date(entry.modifiedAt).toLocaleString())}</span>
+                                </div>
+                            </div>
+                            <div class="asset-actions">
+                                ${entry.type === 'directory'
+                                    ? `<button data-action="open-dir" data-dir="${escapeHtml(entry.relativePath)}">Open</button>`
+                                    : `<button class="secondary" data-action="preview-file" data-path="${escapeHtml(entry.relativePath)}">Preview</button>`
+                                }
+                                ${fileManagementEnabled
+                                    ? `<button class="secondary" data-action="rename" data-path="${escapeHtml(entry.relativePath)}" data-name="${escapeHtml(entry.name)}">Rename</button>`
+                                    : ''
+                                }
+                                ${fileManagementEnabled
+                                    ? `<button class="danger" data-action="delete" data-path="${escapeHtml(entry.relativePath)}" data-name="${escapeHtml(entry.name)}" data-type="${escapeHtml(entry.type)}">Delete</button>`
+                                    : ''
+                                }
+                            </div>
+                        </article>
+                    `;
+                }).join('');
+
+                if (selectedAsset) {
+                    const updatedSelection = currentEntries.find((entry) => entry.relativePath === selectedAsset.relativePath);
+                    renderPreview(updatedSelection || null);
+                } else {
+                    renderPreview(null);
+                }
+                return;
+            }
+
+        }
+
+        async function loadGameAssetCatalog() {
+            const payload = await adminRequest('/api/admin/game-assets/catalog', {
+                method: 'GET'
+            });
+            applyCatalogPayload(payload);
+            return payload;
+        }
+
+        async function loadDirectory(directory = currentDirectory) {
+            const payload = await adminRequest(`/api/admin/assets?dir=${encodeURIComponent(directory || '')}`, {
+                method: 'GET'
+            });
+            currentDirectory = payload.currentDirectory || '';
+            currentDirectoryLabel.textContent = currentDirectory ? `assets/${currentDirectory}` : 'assets/';
+            renderBreadcrumbs(payload.breadcrumbs || [{ name: 'assets', relativePath: '' }]);
+            renderEntries(payload.entries || []);
+            return payload;
+        }
+
+        async function refreshAll(directory = currentDirectory, previewPath = '') {
+            try {
+                setStatus('Refreshing asset library...');
+                await loadGameAssetCatalog();
+                await loadDirectory(directory);
+
+                if (previewPath) {
+                    const previewEntry = currentEntries.find((entry) => entry.relativePath === previewPath);
+                    renderPreview(previewEntry || null);
+                }
+
+                setStatus(fileManagementEnabled ? 'Asset library loaded. File management is unlocked.' : 'Asset library loaded in safe browse mode.');
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = String(reader.result || '');
+                    const contentBase64 = result.includes(',') ? result.split(',')[1] : '';
+                    resolve(contentBase64);
+                };
+                reader.onerror = () => reject(new Error('Unable to read the selected file.'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateImportHint() {
+            const assetKind = importAssetKind.value;
+            if (assetKind === 'playerSkin') {
+                importHint.textContent = 'Player skins are saved into assets/sprites and use this cost in the loadout shop.';
+                return;
+            }
+            if (assetKind === 'enemySprite') {
+                importHint.textContent = 'Enemy sprites are saved into assets/sprites. If the name does not include "enemy", it will be prefixed automatically so the game can discover it.';
+                return;
+            }
+            importHint.textContent = 'Weapon art is saved into assets/weapons. Cost, label, and description are tracked here even when gameplay stats live elsewhere.';
+        }
+
+        async function importGameAsset() {
+            const file = importAssetFile.files?.[0];
+            if (!file) {
+                setStatus('Choose an SVG file to import.', true);
+                return;
+            }
+
+            if (!/\.svg$/i.test(file.name)) {
+                setStatus('Quick import currently accepts SVG files only.', true);
+                return;
+            }
+
+            const label = importAssetLabel.value.trim();
+            if (!label) {
+                setStatus('Add a display name so the asset has a clean in-game label.', true);
+                return;
+            }
+
+            try {
+                setStatus(`Importing ${label}...`);
+                const payload = await adminRequest('/api/admin/game-assets/import', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        assetKind: importAssetKind.value,
+                        label,
+                        fileName: importAssetSlug.value.trim(),
+                        description: importAssetDescription.value.trim(),
+                        cost: Math.max(0, Math.round(Number(importAssetCost.value) || 0)),
+                        overwrite: importOverwrite.value === 'true',
+                        contentBase64: await readFileAsBase64(file)
+                    })
+                });
+
+                applyCatalogPayload(payload.catalog);
+
+                const importedPath = payload.imported || '';
+                importAssetLabel.value = '';
+                importAssetSlug.value = '';
+                importAssetCost.value = '0';
+                importAssetDescription.value = '';
+                importAssetFile.value = '';
+                importOverwrite.value = 'false';
+                lastAutoSlug = '';
+
+                await loadDirectory(importAssetKind.value === 'weaponArt' ? 'weapons' : 'sprites');
+                const importedEntry = currentEntries.find((entry) => entry.relativePath === importedPath);
+                renderPreview(importedEntry || null);
+                setStatus(`Imported ${label} to assets/${importedPath}.`);
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        async function saveSelectedMetadata() {
+            if (!selectedAsset?.relativePath) {
+                setStatus('Select a file before saving asset settings.', true);
+                return;
+            }
+
+            try {
+                const payload = await adminRequest('/api/admin/game-assets/metadata', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        path: selectedAsset.relativePath,
+                        label: metadataLabel.value.trim(),
+                        description: metadataDescription.value.trim(),
+                        cost: Math.max(0, Math.round(Number(metadataCost.value) || 0)),
+                        category: inferGameAssetCategory(selectedAsset.relativePath)
+                    })
+                });
+
+                applyCatalogPayload(payload.catalog);
+                renderEntries(currentEntries);
+                const refreshedSelection = currentEntries.find((entry) => entry.relativePath === selectedAsset?.relativePath);
+                renderPreview(refreshedSelection || selectedAsset);
+                setStatus(`Updated asset settings for ${selectedAsset.name}.`);
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        async function uploadSelectedFile() {
+            if (!fileManagementEnabled) {
+                setStatus('Enable file management before using raw upload.', true);
+                return;
+            }
+
+            const file = uploadInput.files?.[0];
+            if (!file) {
+                setStatus('Choose a file before uploading.', true);
+                return;
+            }
+
+            try {
+                const contentBase64 = await readFileAsBase64(file);
+                await adminRequest('/api/admin/assets/upload', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        dir: currentDirectory,
+                        fileName: file.name,
+                        contentBase64
+                    })
+                });
+                uploadInput.value = '';
+                await refreshAll(currentDirectory);
+                setStatus(`Uploaded raw file ${file.name}.`);
+                return;
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        async function createFolder() {
+            if (!fileManagementEnabled) {
+                setStatus('Enable file management before creating folders.', true);
+                return;
+            }
+
+            const folderName = window.prompt('New folder name');
+            if (!folderName) {
+                return;
+            }
+
+            try {
+                await adminRequest('/api/admin/assets/folders', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        dir: currentDirectory,
+                        name: folderName
+                    })
+                });
+                await refreshAll(currentDirectory);
+                setStatus(`Created folder ${folderName}.`);
+                return;
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        async function renameEntry(relativePath, currentName) {
+            if (!fileManagementEnabled) {
+                setStatus('Enable file management before renaming assets.', true);
+                return;
+            }
+
+            const newName = window.prompt('Rename asset to', currentName);
+            if (!newName || newName === currentName) {
+                return;
+            }
+
+            try {
+                const payload = await adminRequest('/api/admin/assets/rename', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        path: relativePath,
+                        newName
+                    })
+                });
+                await refreshAll(currentDirectory, payload.renamedTo || '');
+                setStatus(`Renamed ${currentName} to ${newName}.`);
+                return;
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        async function deleteEntry(relativePath, type, name) {
+            if (!fileManagementEnabled) {
+                setStatus('Enable file management before deleting assets.', true);
+                return;
+            }
+
+            const expectedName = String(name || '').trim();
+            const typedName = window.prompt(`Type "${expectedName}" to permanently delete this ${type}.`);
+            if (typedName === null) {
+                return;
+            }
+
+            if (typedName !== expectedName) {
+                setStatus('Delete cancelled because the confirmation name did not match.', true);
+                return;
+            }
+
+            try {
+                await adminRequest(`/api/admin/assets?path=${encodeURIComponent(relativePath)}&confirmName=${encodeURIComponent(expectedName)}`, {
+                    method: 'DELETE'
+                });
+                if (selectedAsset?.relativePath === relativePath || selectedAsset?.relativePath?.startsWith(`${relativePath}/`)) {
+                    selectedAsset = null;
+                }
+                await refreshAll(currentDirectory);
+                setStatus(`Deleted ${relativePath}.`);
+                return;
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        refreshNowButton.addEventListener('click', () => refreshAll(currentDirectory));
+        backToAdminButton.addEventListener('click', () => {
+            window.location.href = '/admin.html';
+        });
+        openForgeButton.addEventListener('click', () => {
+            window.location.href = '/sprite-forge.html';
+        });
+        openBuilderButton.addEventListener('click', () => {
+            window.location.href = '/sprite-builder.html';
+        });
+        managementModeButton.addEventListener('click', () => {
+            setManagementMode(!fileManagementEnabled);
+            setStatus(fileManagementEnabled ? 'File management unlocked. Browse with care.' : 'Back in safe browse mode.');
+        });
+
+        importAssetKind.addEventListener('change', updateImportHint);
+        importAssetLabel.addEventListener('input', () => {
+            const suggestedSlug = createSlug(importAssetLabel.value);
+            if (!importAssetSlug.value || importAssetSlug.value === lastAutoSlug) {
+                importAssetSlug.value = suggestedSlug;
+            }
+            lastAutoSlug = suggestedSlug;
+        });
+        importAssetFile.addEventListener('change', () => {
+            const file = importAssetFile.files?.[0];
+            if (!file) {
+                return;
+            }
+
+            if (!importAssetLabel.value.trim()) {
+                importAssetLabel.value = humanizeName(file.name);
+                importAssetSlug.value = createSlug(file.name);
+                lastAutoSlug = importAssetSlug.value;
+            }
+        });
+        importAssetButton.addEventListener('click', importGameAsset);
+        saveMetadataButton.addEventListener('click', saveSelectedMetadata);
+        uploadButton.addEventListener('click', uploadSelectedFile);
+        createFolderButton.addEventListener('click', createFolder);
+
+        breadcrumbs.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-action="open-dir"]');
+            if (!button) {
+                return;
+            }
+            await refreshAll(button.dataset.dir || '');
+        });
+
+        assetList.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button) {
+                return;
+            }
+
+            const action = button.dataset.action;
+            if (action === 'open-dir') {
+                await refreshAll(button.dataset.dir || '');
+                return;
+            }
+            if (action === 'preview-file') {
+                const asset = currentEntries.find((entry) => entry.relativePath === button.dataset.path);
+                renderPreview(asset || null);
+                return;
+            }
+            if (action === 'rename') {
+                await renameEntry(button.dataset.path || '', button.dataset.name || '');
+                return;
+            }
+            if (action === 'delete') {
+                await deleteEntry(button.dataset.path || '', button.dataset.type || 'asset', button.dataset.name || '');
+            }
+        });
+
+        updateImportHint();
+        setMetadataFormEnabled(false);
+        setManagementMode(false);
+        refreshAll('');
+    </script>
+</body>
+</html>

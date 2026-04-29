@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprite Builder</title>
+    <style>
+        :root{--panel:rgba(9,17,27,.92);--border:rgba(116,181,255,.18);--text:#ecf7ff;--muted:#8ba3b7;--shadow:0 24px 60px rgba(0,0,0,.34)}
+        *{box-sizing:border-box} body{margin:0;min-height:100vh;font-family:Georgia,"Times New Roman",serif;color:var(--text);background:radial-gradient(circle at top left,rgba(255,211,111,.12),transparent 25%),radial-gradient(circle at top right,rgba(111,184,255,.15),transparent 28%),linear-gradient(165deg,#071018 0%,#0d1824 50%,#111f2e 100%)}
+        .shell{width:min(1360px,calc(100% - 32px));margin:24px auto 42px}.hero{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:18px}.hero h1{margin:0;font-size:clamp(2rem,4vw,3.2rem);letter-spacing:.04em;text-transform:uppercase}.muted{color:var(--muted)}
+        .panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);backdrop-filter:blur(18px)}.toolbar,.layout-head,.field-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.toolbar,.layout-head{padding:16px 18px;margin-bottom:16px}
+        input,button,select{border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:var(--text);padding:10px 12px;font:inherit} input[type="password"]{min-width:220px} input[type="text"],select{min-width:180px} input[type="color"]{width:52px;min-width:52px;padding:4px;height:42px}
+        button{cursor:pointer;background:linear-gradient(135deg,rgba(123,241,200,.22),rgba(111,184,255,.18))} button.secondary{background:rgba(255,255,255,.08)} .status{margin-left:auto;font-size:.95rem}
+        .layout{display:grid;grid-template-columns:1fr .95fr;gap:18px}.section{padding:18px}.section h2{margin:0 0 14px;letter-spacing:.08em;text-transform:uppercase;font-size:1rem}
+        .controls{display:grid;gap:12px}.control-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px;border-radius:16px;background:rgba(13,23,35,.98);border:1px solid rgba(255,255,255,.06)}.label{display:grid;gap:4px}
+        .preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.preview-box{min-height:360px;border-radius:18px;border:1px dashed rgba(255,255,255,.12);background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;padding:18px;overflow:hidden}.preview-box img{max-width:100%;max-height:380px;object-fit:contain;image-rendering:crisp-edges}
+        .empty{padding:18px;border-radius:16px;background:rgba(255,255,255,.04);color:var(--muted)}.mono{font-family:"Courier New",monospace}.error{color:#ff8f8f}.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.08);font-size:.8rem}
+        @media (max-width:1080px){.layout,.preview-grid{grid-template-columns:1fr}} @media (max-width:720px){.shell{width:min(100% - 20px,100%)}.hero,.toolbar,.layout-head,.field-row,.control-row{flex-direction:column;align-items:flex-start;grid-template-columns:1fr}.status{margin-left:0}}
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <div class="muted">Internal content tooling</div>
+                <h1>Sprite Builder</h1>
+                <div class="muted">Create new operator, enemy, and drone SVGs from procedural shape presets instead of only recoloring templates.</div>
+            </div>
+            <div class="panel section">
+                <div id="builderSummary">Operator Builder</div>
+                <div class="muted" id="builderMeta">Choose an archetype and shape options to generate a new sprite.</div>
+            </div>
+        </section>
+
+        <section class="panel toolbar">
+            <div class="badge">Admin Accounts Only</div>
+            <button id="backToAdmin" class="secondary">Back To Admin</button>
+            <button id="openForge" class="secondary">Sprite Forge</button>
+            <button id="openAssets" class="secondary">Asset Manager</button>
+            <div class="status muted" id="statusText">Ready...</div>
+        </section>
+
+        <section class="panel layout-head">
+            <div class="field-row">
+                <label for="archetypeSelect">Archetype</label>
+                <select id="archetypeSelect">
+                    <option value="operator">Operator</option>
+                    <option value="enemy">Enemy</option>
+                    <option value="drone">Drone</option>
+                </select>
+                <button id="resetBuild" class="secondary">Reset Build</button>
+                <button id="randomizeBuild" class="secondary">Randomize Build</button>
+            </div>
+            <div class="badge" id="controlCount">0 controls</div>
+        </section>
+
+        <section class="layout">
+            <div class="panel section">
+                <h2>Build Controls</h2>
+                <div class="field-row">
+                    <input id="exportDirectory" type="text" placeholder="Export folder e.g. sprites">
+                    <input id="exportFileName" type="text" placeholder="New file name e.g. operator-custom.svg">
+                    <label class="muted"><input id="overwriteToggle" type="checkbox"> Overwrite if exists</label>
+                    <button id="exportSprite">Export SVG</button>
+                </div>
+                <div class="controls" id="controlsHost"></div>
+            </div>
+
+            <div class="panel section">
+                <h2>Live Preview</h2>
+                <div class="preview-grid">
+                    <div>
+                        <div class="muted">Preset Base</div>
+                        <div class="preview-box" id="basePreview"></div>
+                    </div>
+                    <div>
+                        <div class="muted">Generated Sprite</div>
+                        <div class="preview-box" id="generatedPreview"></div>
+                    </div>
+                </div>
+                <div class="empty mono" id="exportInfo" style="margin-top:14px;">No export yet.</div>
+            </div>
+        </section>
+    </main>
+    <script src="js/sprite-builder.js"></script>
+</body>
+</html>

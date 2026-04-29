@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accounts And Leaderboards</title>
+    <style>
+        :root {
+            --bg: #09111a;
+            --panel: rgba(10, 18, 28, 0.92);
+            --panel-strong: rgba(13, 24, 37, 0.98);
+            --border: rgba(116, 181, 255, 0.18);
+            --text: #ecf7ff;
+            --muted: #8ba3b7;
+            --accent: #7bf1c8;
+            --accent-2: #6fb8ff;
+            --danger: #ff7f7f;
+            --warning: #ffd36f;
+            --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(123, 241, 200, 0.15), transparent 28%),
+                radial-gradient(circle at top right, rgba(111, 184, 255, 0.14), transparent 30%),
+                linear-gradient(160deg, #08111a 0%, #0d1824 55%, #101f2e 100%);
+        }
+
+        .shell {
+            width: min(1360px, calc(100% - 32px));
+            margin: 24px auto 48px;
+        }
+
+        .hero, .toolbar, .section-bar, .card-top, .row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .hero { margin-bottom: 18px; }
+        .hero h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.2rem); letter-spacing: 0.04em; text-transform: uppercase; }
+        .muted, .tiny-note { color: var(--muted); }
+        .tiny-note { font-size: 0.82rem; line-height: 1.45; }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .toolbar, .section { padding: 16px 18px; }
+        .toolbar { margin-bottom: 18px; }
+        .section h2 { margin: 0; font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; }
+
+        input, select, textarea, button {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        input[type="password"], input[type="text"], input[type="number"], input[type="date"], select { min-width: 160px; }
+        textarea { min-height: 82px; resize: vertical; width: 100%; }
+
+        button {
+            cursor: pointer;
+            background: linear-gradient(135deg, rgba(123, 241, 200, 0.22), rgba(111, 184, 255, 0.18));
+        }
+
+        button.secondary { background: rgba(255, 255, 255, 0.08); }
+        button.danger { background: linear-gradient(135deg, rgba(255, 127, 127, 0.32), rgba(255, 91, 91, 0.26)); }
+
+        .status { margin-left: auto; font-size: 0.95rem; }
+        .layout { display: grid; grid-template-columns: 1.8fr 1fr; gap: 18px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+        .summary-card, .editor-card, .leaderboard-card { padding: 14px; border-radius: 16px; background: var(--panel-strong); border: 1px solid rgba(255, 255, 255, 0.06); }
+        .summary-card strong { display: block; margin-top: 6px; font-size: 1.4rem; }
+        .pill { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 6px 10px; font-size: 0.8rem; background: rgba(255,255,255,0.08); }
+        .pill.live { color: var(--accent); background: rgba(123, 241, 200, 0.14); }
+        .pill.warning { color: var(--warning); background: rgba(255, 211, 111, 0.14); }
+        .mono { font-family: "Courier New", monospace; }
+        .list { display: grid; gap: 12px; }
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+        .field { display: grid; gap: 6px; }
+        .field.full { grid-column: 1 / -1; }
+        .field span { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+        .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+        .mini-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .mini-actions button { padding: 8px 12px; }
+        .leaderboard-card { display: grid; gap: 10px; }
+        .empty { padding: 18px; border-radius: 16px; background: rgba(255, 255, 255, 0.04); color: var(--muted); }
+        .error { color: var(--danger); }
+
+        @media (max-width: 1100px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 720px) {
+            .shell { width: min(100% - 20px, 100%); }
+            .summary-grid, .form-grid { grid-template-columns: 1fr; }
+            .status { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <div class="muted">Admin center extension</div>
+                <h1>Accounts And Leaderboards</h1>
+                <div class="muted">Edit saved user progression, reset passwords, and manage persistent leaderboard entries without touching data files by hand.</div>
+            </div>
+            <div class="panel section">
+                <div id="lastUpdated">Waiting for first refresh...</div>
+                <div class="tiny-note" id="summaryHint">Load the latest account and leaderboard data.</div>
+            </div>
+        </section>
+
+        <section class="panel toolbar">
+            <div class="pill live">Admin Accounts Only</div>
+            <button id="refreshNow">Refresh</button>
+            <button id="backToAdmin" class="secondary">Back To Admin</button>
+            <div class="status muted" id="statusText">Connecting...</div>
+        </section>
+
+        <section class="layout">
+            <section class="panel section">
+                <div class="section-bar">
+                    <div>
+                        <h2>User Accounts</h2>
+                        <div class="tiny-note">Permanent credits and loadout unlocks are account-wide. Match cash still comes from active runs. Leave the password field blank to keep the current password.</div>
+                    </div>
+                    <input id="userSearch" type="text" placeholder="Filter users by username">
+                </div>
+                <div class="summary-grid" id="accountSummary"></div>
+                <div class="list" id="accountsContainer"></div>
+            </section>
+
+            <section class="panel section">
+                <div class="section-bar">
+                    <div>
+                        <h2>Leaderboard Editor</h2>
+                        <div class="tiny-note">Entries are now persisted under the project data folder.</div>
+                    </div>
+                    <button id="resetLeaderboard" class="danger">Clear Leaderboard</button>
+                </div>
+
+                <div class="leaderboard-card">
+                    <strong>Add Entry</strong>
+                    <div class="form-grid">
+                        <label class="field">
+                            <span>Name</span>
+                            <input id="newEntryName" type="text" placeholder="Player name">
+                        </label>
+                        <label class="field">
+                            <span>Date</span>
+                            <input id="newEntryDate" type="date">
+                        </label>
+                        <label class="field">
+                            <span>Score</span>
+                            <input id="newEntryScore" type="number" min="0" step="1" value="0">
+                        </label>
+                        <label class="field">
+                            <span>Wave</span>
+                            <input id="newEntryWave" type="number" min="0" step="1" value="1">
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button id="addEntryButton">Add Leaderboard Entry</button>
+                    </div>
+                </div>
+
+                <div class="summary-grid" id="leaderboardSummary"></div>
+                <div class="list" id="leaderboardContainer"></div>
+            </section>
+        </section>
+    </main>
+
+    <script>
+        const AUTH_TOKEN_STORAGE_KEY = 'authToken';
+        const refreshNowButton = document.getElementById('refreshNow');
+        const backToAdminButton = document.getElementById('backToAdmin');
+        const statusText = document.getElementById('statusText');
+        const lastUpdated = document.getElementById('lastUpdated');
+        const summaryHint = document.getElementById('summaryHint');
+        const userSearch = document.getElementById('userSearch');
+        const accountSummary = document.getElementById('accountSummary');
+        const accountsContainer = document.getElementById('accountsContainer');
+        const leaderboardSummary = document.getElementById('leaderboardSummary');
+        const leaderboardContainer = document.getElementById('leaderboardContainer');
+        const newEntryName = document.getElementById('newEntryName');
+        const newEntryDate = document.getElementById('newEntryDate');
+        const newEntryScore = document.getElementById('newEntryScore');
+        const newEntryWave = document.getElementById('newEntryWave');
+        const addEntryButton = document.getElementById('addEntryButton');
+        const resetLeaderboardButton = document.getElementById('resetLeaderboard');
+
+        let availableSkins = [];
+        let availableWeapons = [];
+        let users = [];
+        let leaderboardEntries = [];
+
+        newEntryDate.value = new Date().toISOString().split('T')[0];
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function formatNumber(value) { return new Intl.NumberFormat().format(Number(value) || 0); }
+        function formatDateTime(value) { return value ? new Date(value).toLocaleString() : 'Never'; }
+        function setStatus(message, isError = false) { statusText.textContent = message; statusText.className = isError ? 'status error' : 'status muted'; }
+
+        function getAuthToken() {
+            try {
+                return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function redirectToMain(reason = 'required') {
+            window.location.href = `/?admin=${encodeURIComponent(reason)}`;
+        }
+
+        function getHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            const token = getAuthToken();
+            if (token) { headers.Authorization = `Bearer ${token}`; }
+            return headers;
+        }
+
+        async function adminRequest(path, options = {}) {
+            const response = await fetch(path, {
+                headers: { ...getHeaders(), ...(options.headers || {}) },
+                cache: 'no-store',
+                credentials: 'same-origin',
+                ...options
+            });
+            const text = await response.text();
+            const payload = text ? JSON.parse(text) : null;
+            if (!response.ok) {
+                if (response.status === 401) {
+                    redirectToMain('required');
+                    throw new Error('Sign in with an admin account to access the admin center.');
+                }
+
+                if (response.status === 403) {
+                    redirectToMain('forbidden');
+                    throw new Error('This account does not have admin access.');
+                }
+
+                throw new Error(payload?.message || payload?.error || `Request failed (${response.status}).`);
+            }
+            return payload;
+        }
+
+        function renderAccountSummary() {
+            const onlineAccounts = users.filter((user) => Number(user.activeSocketCount) > 0).length;
+            const adminAccounts = users.filter((user) => Boolean(user.isAdmin)).length;
+            accountSummary.innerHTML = [
+                ['Accounts', formatNumber(users.length)],
+                ['Admins', formatNumber(adminAccounts)],
+                ['Online', formatNumber(onlineAccounts)],
+                ['Skin Options', formatNumber(availableSkins.length)],
+                ['Weapon Options', formatNumber(availableWeapons.length)]
+            ].map(([label, value]) => `
+                <div class="summary-card">
+                    <div class="tiny-note">${label}</div>
+                    <strong>${value}</strong>
+                </div>
+            `).join('');
+        }
+
+        function renderLeaderboardSummary() {
+            const topScore = leaderboardEntries[0]?.score || 0;
+            leaderboardSummary.innerHTML = [
+                ['Entries', formatNumber(leaderboardEntries.length)],
+                ['Top Score', formatNumber(topScore)],
+                ['Top Entry Date', escapeHtml(leaderboardEntries[0]?.date || '--')]
+            ].map(([label, value]) => `
+                <div class="summary-card">
+                    <div class="tiny-note">${label}</div>
+                    <strong>${value}</strong>
+                </div>
+            `).join('');
+        }
+
+        function renderUsers() {
+            const query = userSearch.value.trim().toLowerCase();
+            const filteredUsers = users.filter((user) => !query || user.username.toLowerCase().includes(query));
+            if (!filteredUsers.length) {
+                accountsContainer.innerHTML = '<div class="empty">No user accounts match the current filter.</div>';
+                return;
+            }
+
+            const skinOptions = availableSkins.map((skin) => `<option value="${escapeHtml(skin.id)}">${escapeHtml(skin.label)} (${formatNumber(skin.cost)} credits)</option>`).join('');
+            const weaponOptions = availableWeapons.map((weapon) => `<option value="${escapeHtml(weapon.id)}">${escapeHtml(weapon.label)} (${formatNumber(weapon.cost)} credits)</option>`).join('');
+            accountsContainer.innerHTML = filteredUsers.map((user) => `
+                <article class="editor-card" data-user-id="${escapeHtml(user.id)}">
+                    <div class="card-top">
+                        <div>
+                            <strong>${escapeHtml(user.username)}</strong>
+                            <div class="tiny-note mono">${escapeHtml(user.id)}</div>
+                        </div>
+                        <span class="pill ${user.activeSocketCount ? 'live' : 'warning'}">${user.activeSocketCount ? `${user.activeSocketCount} live socket${user.activeSocketCount === 1 ? '' : 's'}` : 'Offline'}</span>
+                    </div>
+                    <div class="tiny-note">Created ${escapeHtml(formatDateTime(user.createdAt))} | Last login ${escapeHtml(formatDateTime(user.lastLoginAt))}</div>
+                    <div class="form-grid">
+                        <label class="field"><span>Username</span><input data-field="username" type="text" value="${escapeHtml(user.username)}"></label>
+                        <label class="field"><span>Permanent Credits</span><input data-field="metaCurrency" type="number" min="0" step="1" value="${escapeHtml(String(user.progression.metaCurrency))}"></label>
+                        <label class="field"><span>Admin Access</span><input data-field="isAdmin" type="checkbox" ${user.isAdmin ? 'checked' : ''}></label>
+                        <div class="field">
+                            <span>Credit Shortcuts</span>
+                            <div class="mini-actions">
+                                <button type="button" class="secondary" data-action="adjust-credits" data-delta="100">+100</button>
+                                <button type="button" class="secondary" data-action="adjust-credits" data-delta="500">+500</button>
+                                <button type="button" class="secondary" data-action="adjust-credits" data-delta="1000">+1000</button>
+                            </div>
+                        </div>
+                        <label class="field"><span>Selected Skin</span><select data-field="selectedSkin">${skinOptions}</select></label>
+                        <label class="field"><span>Selected Weapon</span><select data-field="selectedWeapon">${weaponOptions}</select></label>
+                        <label class="field full"><span>Unlocked Skins</span><textarea data-field="unlockedSkins">${escapeHtml(user.progression.unlockedSkins.join(', '))}</textarea></label>
+                        <label class="field full"><span>Unlocked Weapons</span><textarea data-field="unlockedWeapons">${escapeHtml((user.progression.unlockedWeapons || []).join(', '))}</textarea></label>
+                        <label class="field"><span>Matches Played</span><input data-field="matchesPlayed" type="number" min="0" step="1" value="${escapeHtml(String(user.progression.stats.matchesPlayed))}"></label>
+                        <label class="field"><span>Best Wave</span><input data-field="bestWave" type="number" min="0" step="1" value="${escapeHtml(String(user.progression.stats.bestWave))}"></label>
+                        <label class="field"><span>Total Score</span><input data-field="totalScore" type="number" min="0" step="1" value="${escapeHtml(String(user.progression.stats.totalScore))}"></label>
+                        <label class="field"><span>Total Meta Earned</span><input data-field="totalMetaCurrencyEarned" type="number" min="0" step="1" value="${escapeHtml(String(user.progression.stats.totalMetaCurrencyEarned))}"></label>
+                        <label class="field full"><span>Optional New Password</span><input data-field="password" type="password" placeholder="Leave blank to keep existing password"></label>
+                    </div>
+                    <div class="actions">
+                        <button data-action="save-user" data-user-id="${escapeHtml(user.id)}">Save Account</button>
+                        <button class="danger" data-action="delete-user" data-user-id="${escapeHtml(user.id)}" data-username="${escapeHtml(user.username)}">Delete Account</button>
+                    </div>
+                </article>
+            `).join('');
+
+            filteredUsers.forEach((user) => {
+                const card = accountsContainer.querySelector(`[data-user-id="${user.id}"]`);
+                const skinSelect = card?.querySelector('[data-field="selectedSkin"]');
+                const weaponSelect = card?.querySelector('[data-field="selectedWeapon"]');
+                if (skinSelect) { skinSelect.value = user.progression.selectedSkin; }
+                if (weaponSelect) { weaponSelect.value = user.progression.selectedWeapon; }
+            });
+        }
+
+        function renderLeaderboard() {
+            if (!leaderboardEntries.length) {
+                leaderboardContainer.innerHTML = '<div class="empty">No leaderboard entries are saved yet.</div>';
+                return;
+            }
+
+            leaderboardContainer.innerHTML = leaderboardEntries.map((entry, index) => `
+                <article class="leaderboard-card" data-entry-id="${escapeHtml(entry.id)}">
+                    <div class="card-top">
+                        <strong>#${index + 1} ${escapeHtml(entry.name)}</strong>
+                        <span class="pill">${formatNumber(entry.score)} pts | Wave ${formatNumber(entry.wave)}</span>
+                    </div>
+                    <div class="form-grid">
+                        <label class="field"><span>Name</span><input data-field="name" type="text" value="${escapeHtml(entry.name)}"></label>
+                        <label class="field"><span>Date</span><input data-field="date" type="date" value="${escapeHtml(entry.date)}"></label>
+                        <label class="field"><span>Score</span><input data-field="score" type="number" min="0" step="1" value="${escapeHtml(String(entry.score))}"></label>
+                        <label class="field"><span>Wave</span><input data-field="wave" type="number" min="0" step="1" value="${escapeHtml(String(entry.wave))}"></label>
+                    </div>
+                    <div class="actions">
+                        <button data-action="save-entry" data-entry-id="${escapeHtml(entry.id)}">Save Entry</button>
+                        <button class="danger" data-action="delete-entry" data-entry-id="${escapeHtml(entry.id)}" data-entry-name="${escapeHtml(entry.name)}">Delete Entry</button>
+                    </div>
+                </article>
+            `).join('');
+        }
+
+        async function loadUsers() {
+            const payload = await adminRequest('/api/admin/users', { method: 'GET' });
+            users = Array.isArray(payload.users) ? payload.users : [];
+            availableSkins = Array.isArray(payload.availableSkins) ? payload.availableSkins : [];
+            availableWeapons = Array.isArray(payload.availableWeapons) ? payload.availableWeapons : [];
+            renderAccountSummary();
+            renderUsers();
+        }
+
+        async function loadLeaderboard() {
+            const payload = await adminRequest('/api/admin/leaderboard', { method: 'GET' });
+            leaderboardEntries = Array.isArray(payload.entries) ? payload.entries : [];
+            renderLeaderboardSummary();
+            renderLeaderboard();
+        }
+
+        async function refreshAll(successMessage = '') {
+            try {
+                setStatus('Refreshing account and leaderboard data...');
+                await Promise.all([loadUsers(), loadLeaderboard()]);
+                lastUpdated.textContent = `Last updated: ${new Date().toLocaleString()}`;
+                summaryHint.textContent = 'Account edits update users.json. Leaderboard edits update leaderboard.json.';
+                setStatus(successMessage || 'Admin data loaded.');
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        function requireField(card, fieldName) {
+            const element = card?.querySelector(`[data-field="${fieldName}"]`);
+            if (!element) {
+                throw new Error(`Missing account field: ${fieldName}`);
+            }
+            return element;
+        }
+
+        function getUserCardPayload(card) {
+            return {
+                username: requireField(card, 'username').value.trim(),
+                isAdmin: requireField(card, 'isAdmin').checked,
+                metaCurrency: Number(requireField(card, 'metaCurrency').value || 0),
+                selectedSkin: requireField(card, 'selectedSkin').value,
+                unlockedSkins: requireField(card, 'unlockedSkins').value,
+                selectedWeapon: requireField(card, 'selectedWeapon').value,
+                unlockedWeapons: requireField(card, 'unlockedWeapons').value,
+                password: requireField(card, 'password').value,
+                stats: {
+                    matchesPlayed: Number(requireField(card, 'matchesPlayed').value || 0),
+                    bestWave: Number(requireField(card, 'bestWave').value || 0),
+                    totalScore: Number(requireField(card, 'totalScore').value || 0),
+                    totalMetaCurrencyEarned: Number(requireField(card, 'totalMetaCurrencyEarned').value || 0)
+                }
+            };
+        }
+
+        function getEntryCardPayload(card) {
+            return {
+                name: requireField(card, 'name').value.trim(),
+                date: requireField(card, 'date').value,
+                score: Number(requireField(card, 'score').value || 0),
+                wave: Number(requireField(card, 'wave').value || 0)
+            };
+        }
+
+        async function saveUser(userId, card) {
+            const payload = getUserCardPayload(card);
+            const response = await adminRequest(`/api/admin/users/${encodeURIComponent(userId)}`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            const savedCredits = response?.user?.progression?.metaCurrency ?? payload.metaCurrency;
+            const savedUsername = response?.user?.username || payload.username || 'account';
+            const savedMessage = response.passwordChanged
+                ? `Saved ${savedUsername}. Permanent credits now ${formatNumber(savedCredits)} and active sessions were reset.`
+                : `Saved ${savedUsername}. Permanent credits now ${formatNumber(savedCredits)}.`;
+            await refreshAll(savedMessage);
+        }
+
+        async function deleteUser(userId, username) {
+            const typedName = window.prompt(`Type "${username}" to delete this account.`);
+            if (typedName === null) { return; }
+            if (typedName !== username) { throw new Error('Delete cancelled because the account name did not match.'); }
+            await adminRequest(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+            await refreshAll(`Deleted account ${username}.`);
+        }
+
+        async function addLeaderboardEntry() {
+            const response = await adminRequest('/api/admin/leaderboard', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: newEntryName.value.trim(),
+                    score: Number(newEntryScore.value || 0),
+                    wave: Number(newEntryWave.value || 0),
+                    date: newEntryDate.value
+                })
+            });
+            newEntryName.value = '';
+            newEntryScore.value = '0';
+            newEntryWave.value = '1';
+            newEntryDate.value = new Date().toISOString().split('T')[0];
+            await refreshAll(`Added leaderboard entry for ${response?.entry?.name || 'player'}.`);
+        }
+
+        async function saveLeaderboardEntry(entryId, card) {
+            const response = await adminRequest(`/api/admin/leaderboard/${encodeURIComponent(entryId)}`, {
+                method: 'POST',
+                body: JSON.stringify(getEntryCardPayload(card))
+            });
+            await refreshAll(`Saved leaderboard entry for ${response?.entry?.name || 'player'}.`);
+        }
+
+        async function deleteLeaderboardEntry(entryId, entryName) {
+            const typedName = window.prompt(`Type "${entryName}" to delete this leaderboard entry.`);
+            if (typedName === null) { return; }
+            if (typedName !== entryName) { throw new Error('Delete cancelled because the entry name did not match.'); }
+            await adminRequest(`/api/admin/leaderboard/${encodeURIComponent(entryId)}`, { method: 'DELETE' });
+            await refreshAll(`Deleted leaderboard entry for ${entryName}.`);
+        }
+
+        async function resetLeaderboard() {
+            const typed = window.prompt('Type CLEAR to wipe the leaderboard.');
+            if (typed === null) { return; }
+            if (typed !== 'CLEAR') { throw new Error('Leaderboard reset cancelled.'); }
+            await adminRequest('/api/admin/leaderboard/reset', { method: 'POST', body: JSON.stringify({}) });
+            await refreshAll('Leaderboard cleared.');
+        }
+
+        refreshNowButton.addEventListener('click', refreshAll);
+        backToAdminButton.addEventListener('click', () => { window.location.href = '/admin.html'; });
+        userSearch.addEventListener('input', renderUsers);
+        addEntryButton.addEventListener('click', async () => {
+            try { await addLeaderboardEntry(); } catch (error) { setStatus(error.message, true); }
+        });
+        resetLeaderboardButton.addEventListener('click', async () => {
+            try { await resetLeaderboard(); } catch (error) { setStatus(error.message, true); }
+        });
+
+        accountsContainer.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button) { return; }
+            const card = button.closest('.editor-card');
+            try {
+                if (button.dataset.action === 'adjust-credits') {
+                    const creditInput = card?.querySelector('[data-field="metaCurrency"]');
+                    const currentValue = Number(creditInput?.value || 0);
+                    const nextValue = Math.max(0, currentValue + Number(button.dataset.delta || 0));
+                    if (creditInput) {
+                        creditInput.value = String(nextValue);
+                        setStatus(`Credit change staged at ${formatNumber(nextValue)}. Click Save Account to apply.`);
+                    }
+                    return;
+                }
+                if (button.dataset.action === 'save-user') {
+                    await saveUser(button.dataset.userId, card);
+                    return;
+                }
+                if (button.dataset.action === 'delete-user') {
+                    await deleteUser(button.dataset.userId, button.dataset.username || '');
+                }
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        });
+
+        leaderboardContainer.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button) { return; }
+            const card = button.closest('.leaderboard-card');
+            try {
+                if (button.dataset.action === 'save-entry') {
+                    await saveLeaderboardEntry(button.dataset.entryId, card);
+                    return;
+                }
+                if (button.dataset.action === 'delete-entry') {
+                    await deleteLeaderboardEntry(button.dataset.entryId, button.dataset.entryName || '');
+                }
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        });
+
+        refreshAll();
+    </script>
+</body>
+</html>

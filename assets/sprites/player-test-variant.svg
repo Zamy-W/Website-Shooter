@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="p1-armor" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#43bc0b"/>
+      <stop offset="1" stop-color="#6178ea"/>
+    </linearGradient>
+    <linearGradient id="p1-helmet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#913fe4"/>
+      <stop offset="1" stop-color="#ac5c16"/>
+    </linearGradient>
+    <linearGradient id="p1-visor" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0d29de"/>
+      <stop offset="1" stop-color="#f37430"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="64" cy="108" rx="27" ry="11" fill="#e228aa" opacity="0.24"/>
+  <path d="M33 39 L46 28 H82 L95 39 L89 88 L39 88 Z" fill="#dfb353"/>
+  <path d="M37 37 L48 30 H80 L91 37 L86 84 L42 84 Z" fill="url(#p1-armor)"/>
+  <path d="M47 46 H81 V74 H47 Z" fill="#5c2097" opacity="0.74"/>
+  <path d="M52 44 H76 V52 H52 Z" fill="#aae278" opacity="0.22"/>
+  <path d="M42 38 L33 52 L39 76 L48 72 L50 46 Z" fill="#1c9eca"/>
+  <path d="M86 38 L95 52 L89 76 L80 72 L78 46 Z" fill="#1c9eca"/>
+  <path d="M45 84 H58 V109 H46 Z" fill="#25a257"/>
+  <path d="M70 84 H83 V109 H71 Z" fill="#25a257"/>
+  <rect x="43" y="104" width="18" height="8" rx="4" fill="#dd3c64"/>
+  <rect x="67" y="104" width="18" height="8" rx="4" fill="#dd3c64"/>
+  <path d="M43 70 H85 V78 H43 Z" fill="#9765e6"/>
+  <path d="M38 60 H48 V84 H39 Z" fill="#75eabc"/>
+  <path d="M80 60 H90 V84 H81 Z" fill="#75eabc"/>
+  <circle cx="64" cy="26" r="23" fill="#7dcade"/>
+  <path d="M45 17 C49 8 58 4 64 4 C70 4 79 8 83 17 L82 35 H46 Z" fill="url(#p1-helmet)"/>
+  <path d="M50 14 H78 C82 14 85 17 85 21 V29 C85 33 82 36 78 36 H50 C46 36 43 33 43 29 V21 C43 17 46 14 50 14 Z" fill="#58ed26"/>
+  <rect x="46" y="18" width="36" height="12" rx="6" fill="url(#p1-visor)"/>
+  <circle cx="55" cy="24" r="2.3" fill="#e2c965"/>
+  <circle cx="73" cy="24" r="2.3" fill="#e2c965"/>
+  <path d="M54 35 H74 V41 H54 Z" fill="#dd3c64"/>
+  <path d="M58 56 H70 V68 H58 Z" fill="#f37430" opacity="0.75"/>
+</svg>

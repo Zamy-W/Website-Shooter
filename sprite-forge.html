@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprite Forge</title>
+    <style>
+        :root {
+            --bg: #08111a;
+            --panel: rgba(9, 17, 27, 0.92);
+            --panel-strong: rgba(13, 23, 35, 0.98);
+            --border: rgba(116, 181, 255, 0.18);
+            --text: #ecf7ff;
+            --muted: #8ba3b7;
+            --accent: #7bf1c8;
+            --accent-2: #6fb8ff;
+            --danger: #ff8f8f;
+            --warning: #ffd36f;
+            --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(255, 211, 111, 0.12), transparent 25%),
+                radial-gradient(circle at top right, rgba(111, 184, 255, 0.15), transparent 28%),
+                linear-gradient(165deg, #071018 0%, #0d1824 50%, #111f2e 100%);
+        }
+
+        .shell {
+            width: min(1360px, calc(100% - 32px));
+            margin: 24px auto 42px;
+        }
+
+        .hero {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 24px;
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.2rem);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .toolbar,
+        .subtoolbar,
+        .field-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .toolbar,
+        .subtoolbar {
+            padding: 16px 18px;
+            margin-bottom: 16px;
+        }
+
+        .subtoolbar {
+            justify-content: space-between;
+        }
+
+        input,
+        button,
+        select {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        input[type="password"] {
+            min-width: 220px;
+        }
+
+        input[type="text"],
+        select {
+            min-width: 180px;
+        }
+
+        input[type="color"] {
+            width: 52px;
+            min-width: 52px;
+            padding: 4px;
+            height: 42px;
+        }
+
+        button {
+            cursor: pointer;
+            background: linear-gradient(135deg, rgba(123, 241, 200, 0.22), rgba(111, 184, 255, 0.18));
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .status {
+            margin-left: auto;
+            font-size: 0.95rem;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 18px;
+        }
+
+        .section {
+            padding: 18px;
+        }
+
+        .section h2 {
+            margin: 0 0 14px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 1rem;
+        }
+
+        .palette-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .palette-row {
+            display: grid;
+            grid-template-columns: auto 1fr auto auto;
+            gap: 10px;
+            align-items: center;
+            padding: 12px;
+            border-radius: 16px;
+            background: var(--panel-strong);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .palette-label {
+            display: grid;
+            gap: 4px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            font-size: 0.8rem;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .preview-card {
+            display: grid;
+            gap: 10px;
+        }
+
+        .preview-box {
+            min-height: 340px;
+            border-radius: 18px;
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            overflow: hidden;
+        }
+
+        .preview-box img {
+            max-width: 100%;
+            max-height: 360px;
+            object-fit: contain;
+            image-rendering: crisp-edges;
+        }
+
+        .empty {
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--muted);
+        }
+
+        .mono {
+            font-family: "Courier New", monospace;
+        }
+
+        .error {
+            color: var(--danger);
+        }
+
+        .checkbox-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--muted);
+        }
+
+        @media (max-width: 1080px) {
+            .layout,
+            .preview-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .shell {
+                width: min(100% - 20px, 100%);
+            }
+
+            .hero,
+            .toolbar,
+            .subtoolbar,
+            .field-row,
+            .palette-row {
+                grid-template-columns: 1fr;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .status {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <div class="muted">Internal content tooling</div>
+                <h1>Sprite Forge</h1>
+                <div class="muted">Pick an SVG template, recolor its palette live, and export a new sprite variant back into the game.</div>
+            </div>
+            <div class="panel section">
+                <div id="templateSummary">No template loaded</div>
+                <div class="muted" id="templateMeta">Choose a sprite, enemy, or weapon SVG to begin.</div>
+            </div>
+        </section>
+
+        <section class="panel toolbar">
+            <div class="badge">Admin Accounts Only</div>
+            <button id="refreshTemplates">Refresh Templates</button>
+            <button id="backToAdmin" class="secondary">Back To Admin</button>
+            <button id="openAssets" class="secondary">Asset Manager</button>
+            <div class="status muted" id="statusText">Connecting...</div>
+        </section>
+
+        <section class="panel subtoolbar">
+            <div class="field-row">
+                <label for="templateSelect">Template</label>
+                <select id="templateSelect"></select>
+                <button id="resetColors" class="secondary">Reset Colors</button>
+                <button id="shuffleColors" class="secondary">Shuffle Palette</button>
+            </div>
+            <div class="badge" id="paletteCount">0 colors</div>
+        </section>
+
+        <section class="layout">
+            <div class="panel section">
+                <h2>Palette Controls</h2>
+                <div class="field-row">
+                    <input id="exportDirectory" type="text" placeholder="Export folder e.g. sprites">
+                    <input id="exportFileName" type="text" placeholder="New file name e.g. player_custom.svg">
+                    <label class="checkbox-row"><input id="overwriteToggle" type="checkbox"> Overwrite if exists</label>
+                    <button id="exportSprite">Export SVG</button>
+                </div>
+                <div class="palette-grid" id="paletteControls"></div>
+            </div>
+
+            <div class="panel section">
+                <h2>Live Preview</h2>
+                <div class="preview-grid">
+                    <div class="preview-card">
+                        <div class="muted">Original</div>
+                        <div class="preview-box" id="originalPreview"></div>
+                    </div>
+                    <div class="preview-card">
+                        <div class="muted">Generated</div>
+                        <div class="preview-box" id="generatedPreview"></div>
+                    </div>
+                </div>
+                <div class="empty mono" id="exportInfo" style="margin-top: 14px;">No export yet.</div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const AUTH_TOKEN_STORAGE_KEY = 'authToken';
+        const refreshTemplatesButton = document.getElementById('refreshTemplates');
+        const backToAdminButton = document.getElementById('backToAdmin');
+        const openAssetsButton = document.getElementById('openAssets');
+        const statusText = document.getElementById('statusText');
+        const templateSelect = document.getElementById('templateSelect');
+        const resetColorsButton = document.getElementById('resetColors');
+        const shuffleColorsButton = document.getElementById('shuffleColors');
+        const paletteControls = document.getElementById('paletteControls');
+        const originalPreview = document.getElementById('originalPreview');
+        const generatedPreview = document.getElementById('generatedPreview');
+        const templateSummary = document.getElementById('templateSummary');
+        const templateMeta = document.getElementById('templateMeta');
+        const paletteCount = document.getElementById('paletteCount');
+        const exportDirectoryInput = document.getElementById('exportDirectory');
+        const exportFileNameInput = document.getElementById('exportFileName');
+        const overwriteToggle = document.getElementById('overwriteToggle');
+        const exportSpriteButton = document.getElementById('exportSprite');
+        const exportInfo = document.getElementById('exportInfo');
+
+        let templates = [];
+        let selectedTemplate = null;
+        let originalSvgText = '';
+        let generatedSvgText = '';
+        let paletteState = [];
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function setStatus(message, isError = false) {
+            statusText.textContent = message;
+            statusText.className = isError ? 'status error' : 'status muted';
+        }
+
+        function getAuthToken() {
+            try {
+                return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function redirectToMain(reason = 'required') {
+            window.location.href = `/?admin=${encodeURIComponent(reason)}`;
+        }
+
+        function getHeaders() {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            const token = getAuthToken();
+            if (token) {
+                headers.Authorization = `Bearer ${token}`;
+            }
+            return headers;
+        }
+
+        async function adminRequest(url, options = {}) {
+            const response = await fetch(url, {
+                headers: getHeaders(),
+                cache: 'no-store',
+                credentials: 'same-origin',
+                ...options
+            });
+
+            const text = await response.text();
+            let payload = null;
+            try {
+                payload = text ? JSON.parse(text) : null;
+            } catch (error) {
+                payload = null;
+            }
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    redirectToMain('required');
+                    throw new Error('Sign in with an admin account to access Sprite Forge.');
+                }
+
+                if (response.status === 403) {
+                    redirectToMain('forbidden');
+                    throw new Error('This account does not have admin access.');
+                }
+
+                throw new Error(payload?.message || payload?.error || `Request failed (${response.status}).`);
+            }
+
+            return payload;
+        }
+
+        function toDataUrl(svgText) {
+            return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+        }
+
+        function normalizeHexColor(value) {
+            const trimmed = String(value || '').trim();
+            if (!/^#[0-9a-f]{3,8}$/i.test(trimmed)) {
+                return null;
+            }
+            if (trimmed.length === 4) {
+                return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`.toLowerCase();
+            }
+            return trimmed.toLowerCase();
+        }
+
+        function extractPalette(svgText) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svgText, 'image/svg+xml');
+            const counter = new Map();
+            const attrs = ['fill', 'stroke', 'stop-color'];
+
+            doc.querySelectorAll('*').forEach((element) => {
+                attrs.forEach((attr) => {
+                    const value = element.getAttribute(attr);
+                    const normalized = normalizeHexColor(value);
+                    if (!normalized) {
+                        return;
+                    }
+                    counter.set(normalized, (counter.get(normalized) || 0) + 1);
+                });
+            });
+
+            return Array.from(counter.entries())
+                .map(([originalColor, usageCount]) => ({
+                    originalColor,
+                    currentColor: originalColor,
+                    usageCount
+                }))
+                .sort((left, right) => right.usageCount - left.usageCount || left.originalColor.localeCompare(right.originalColor));
+        }
+
+        function applyPalette(svgText, palette) {
+            const parser = new DOMParser();
+            const serializer = new XMLSerializer();
+            const doc = parser.parseFromString(svgText, 'image/svg+xml');
+            const attrs = ['fill', 'stroke', 'stop-color'];
+            const replacements = new Map(
+                palette.map((entry) => [entry.originalColor.toLowerCase(), normalizeHexColor(entry.currentColor) || entry.originalColor.toLowerCase()])
+            );
+
+            doc.querySelectorAll('*').forEach((element) => {
+                attrs.forEach((attr) => {
+                    const value = element.getAttribute(attr);
+                    const normalized = normalizeHexColor(value);
+                    if (!normalized || !replacements.has(normalized)) {
+                        return;
+                    }
+                    element.setAttribute(attr, replacements.get(normalized));
+                });
+            });
+
+            return serializer.serializeToString(doc);
+        }
+
+        function randomColor() {
+            const hue = Math.floor(Math.random() * 360);
+            const saturation = 55 + Math.floor(Math.random() * 35);
+            const lightness = 35 + Math.floor(Math.random() * 35);
+            return hslToHex(hue, saturation, lightness);
+        }
+
+        function hslToHex(h, s, l) {
+            s /= 100;
+            l /= 100;
+            const k = (n) => (n + h / 30) % 12;
+            const a = s * Math.min(l, 1 - l);
+            const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+            return `#${[f(0), f(8), f(4)].map((value) => Math.round(value * 255).toString(16).padStart(2, '0')).join('')}`;
+        }
+
+        function updatePreview() {
+            if (!originalSvgText) {
+                originalPreview.innerHTML = '<div class="empty">No template selected.</div>';
+                generatedPreview.innerHTML = '<div class="empty">No generated sprite yet.</div>';
+                return;
+            }
+
+            generatedSvgText = applyPalette(originalSvgText, paletteState);
+            originalPreview.innerHTML = `<img alt="Original sprite" src="${toDataUrl(originalSvgText)}">`;
+            generatedPreview.innerHTML = `<img alt="Generated sprite" src="${toDataUrl(generatedSvgText)}">`;
+            paletteCount.textContent = `${paletteState.length} ${paletteState.length === 1 ? 'color' : 'colors'}`;
+        }
+
+        function renderPaletteControls() {
+            if (!paletteState.length) {
+                paletteControls.innerHTML = '<div class="empty">No editable hex colors were detected in this SVG.</div>';
+                updatePreview();
+                return;
+            }
+
+            paletteControls.innerHTML = paletteState.map((entry, index) => `
+                <div class="palette-row">
+                    <input type="color" data-index="${index}" data-role="picker" value="${entry.currentColor}">
+                    <div class="palette-label">
+                        <strong>${escapeHtml(entry.originalColor)}</strong>
+                        <span class="muted">${entry.usageCount} mapped ${entry.usageCount === 1 ? 'use' : 'uses'}</span>
+                    </div>
+                    <input type="text" class="mono" data-index="${index}" data-role="hex" value="${entry.currentColor}">
+                    <button class="secondary" data-index="${index}" data-action="reset-color">Reset</button>
+                </div>
+            `).join('');
+
+            updatePreview();
+        }
+
+        async function loadTemplateList() {
+            try {
+                const payload = await adminRequest('/api/admin/assets/svg-templates', { method: 'GET' });
+                templates = payload.templates || [];
+                templateSelect.innerHTML = templates.map((template) => `
+                    <option value="${escapeHtml(template.relativePath)}">${escapeHtml(template.relativePath)}</option>
+                `).join('');
+
+                if (!templates.length) {
+                    templateSelect.innerHTML = '<option value="">No SVG templates found</option>';
+                    setStatus('No SVG templates found in assets.', true);
+                    return;
+                }
+
+                const nextTemplatePath = selectedTemplate?.relativePath || templates[0].relativePath;
+                templateSelect.value = nextTemplatePath;
+                await loadTemplate(nextTemplatePath);
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        async function loadTemplate(relativePath) {
+            selectedTemplate = templates.find((template) => template.relativePath === relativePath) || null;
+            if (!selectedTemplate) {
+                setStatus('Template not found.', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(selectedTemplate.publicUrl, { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error(`Unable to load template (${response.status}).`);
+                }
+
+                originalSvgText = await response.text();
+                paletteState = extractPalette(originalSvgText);
+                generatedSvgText = originalSvgText;
+                templateSummary.textContent = selectedTemplate.relativePath;
+                templateMeta.textContent = `${paletteState.length} editable colors detected`;
+                const pathParts = selectedTemplate.relativePath.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const directory = pathParts.slice(0, -1).join('/');
+                exportDirectoryInput.value = directory;
+                exportFileNameInput.value = fileName.replace(/\.svg$/i, '-variant.svg');
+                renderPaletteControls();
+                exportInfo.textContent = `Ready to export a variant of ${selectedTemplate.relativePath}`;
+                setStatus(`Loaded ${selectedTemplate.relativePath}.`);
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        function resetPalette() {
+            paletteState = paletteState.map((entry) => ({
+                ...entry,
+                currentColor: entry.originalColor
+            }));
+            renderPaletteControls();
+        }
+
+        function shufflePalette() {
+            paletteState = paletteState.map((entry) => ({
+                ...entry,
+                currentColor: randomColor()
+            }));
+            renderPaletteControls();
+        }
+
+        function updatePaletteEntry(index, nextColor) {
+            const normalized = normalizeHexColor(nextColor);
+            if (!normalized || !paletteState[index]) {
+                return;
+            }
+
+            paletteState[index].currentColor = normalized;
+            renderPaletteControls();
+        }
+
+        async function exportSprite() {
+            if (!generatedSvgText || !selectedTemplate) {
+                setStatus('Choose a template before exporting.', true);
+                return;
+            }
+
+            const exportDirectory = exportDirectoryInput.value.trim();
+            const exportFileName = exportFileNameInput.value.trim();
+            if (!exportFileName || !/\.svg$/i.test(exportFileName)) {
+                setStatus('Export file name must end in .svg', true);
+                return;
+            }
+
+            try {
+                const contentBase64 = btoa(unescape(encodeURIComponent(generatedSvgText)));
+                const payload = await adminRequest('/api/admin/assets/upload', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        dir: exportDirectory,
+                        fileName: exportFileName,
+                        contentBase64,
+                        overwrite: overwriteToggle.checked
+                    })
+                });
+                exportInfo.innerHTML = `Exported <strong>${escapeHtml(payload.uploaded)}</strong>${payload.overwritten ? ' (overwrite enabled)' : ''}.`;
+                setStatus(`Exported ${payload.uploaded}.`);
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        refreshTemplatesButton.addEventListener('click', loadTemplateList);
+        backToAdminButton.addEventListener('click', () => {
+            window.location.href = '/admin.html';
+        });
+        openAssetsButton.addEventListener('click', () => {
+            window.location.href = '/asset-admin.html';
+        });
+        templateSelect.addEventListener('change', (event) => {
+            loadTemplate(event.target.value);
+        });
+        resetColorsButton.addEventListener('click', resetPalette);
+        shuffleColorsButton.addEventListener('click', shufflePalette);
+        exportSpriteButton.addEventListener('click', exportSprite);
+
+        paletteControls.addEventListener('input', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+            const index = Number(target.dataset.index);
+            if (!Number.isInteger(index)) {
+                return;
+            }
+
+            if (target.dataset.role === 'picker' || target.dataset.role === 'hex') {
+                updatePaletteEntry(index, target.value);
+            }
+        });
+
+        paletteControls.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-action="reset-color"]');
+            if (!button) {
+                return;
+            }
+            const index = Number(button.dataset.index);
+            if (!Number.isInteger(index) || !paletteState[index]) {
+                return;
+            }
+            paletteState[index].currentColor = paletteState[index].originalColor;
+            renderPaletteControls();
+        });
+
+        loadTemplateList();
+    </script>
+</body>
+</html>

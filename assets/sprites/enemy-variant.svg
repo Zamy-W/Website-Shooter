@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="e2-shell" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd779"/>
+      <stop offset="1" stop-color="#b06a16"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="64" cy="109" rx="25" ry="10" fill="#000000" opacity="0.26"/>
+  <path d="M37 42 L50 23 H78 L91 42 L86 89 L42 89 Z" fill="#1b1308"/>
+  <path d="M40 40 L52 26 H76 L88 40 L83 84 L45 84 Z" fill="url(#e2-shell)"/>
+  <path d="M47 48 H81 L77 74 H51 Z" fill="#694015" opacity="0.74"/>
+  <path d="M45 40 L34 56 L40 82 L49 76 L52 46 Z" fill="#5b3311"/>
+  <path d="M83 40 L94 56 L88 82 L79 76 L76 46 Z" fill="#5b3311"/>
+  <path d="M47 84 H58 V109 H46 Z" fill="#2b1908"/>
+  <path d="M70 84 H81 V109 H69 Z" fill="#2b1908"/>
+  <path d="M48 28 L64 8 L80 28" fill="none" stroke="#6a400e" stroke-width="6" stroke-linecap="round"/>
+  <path d="M49 34 H79 L75 52 H53 Z" fill="#24180c"/>
+  <circle cx="54" cy="45" r="4.8" fill="#7df9ff"/>
+  <circle cx="74" cy="45" r="4.8" fill="#7df9ff"/>
+  <circle cx="54" cy="45" r="9" fill="#7df9ff" opacity="0.18"/>
+  <circle cx="74" cy="45" r="9" fill="#7df9ff" opacity="0.18"/>
+  <path d="M49 64 L57 78 L64 68 L71 78 L79 64" fill="none" stroke="#fff8ef" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M43 59 H85 V65 H43 Z" fill="#69ddff"/>
+</svg>
