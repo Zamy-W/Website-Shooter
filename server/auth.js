@@ -122,7 +122,8 @@ function saveUserStore() {
 }
 
 function initUserStore() {
-    userStore = loadUserStore();
+    const loaded = loadUserStore();
+    userStore.users = loaded.users;
 }
 
 function getUserById(userId) {
