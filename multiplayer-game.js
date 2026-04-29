@@ -262,6 +262,10 @@ class MultiplayerGame {
         this.enemies = new Map();
         this.particles = new Map();
         this.powerUps = new Map();
+
+        // Interpolation buffer: stores last 3 server snapshots for smooth rendering
+        this.stateBuffer = [];
+        this.interpolationDelay = 100; // render 100ms behind to interpolate between snapshots
         this.wave = 1;
         this.waveInfo = {
             bossWave: false,
@@ -4024,9 +4028,64 @@ class MultiplayerGame {
         
         this.lastPlayerState = currentPlayer ? { ...currentPlayer } : null;
         this.refreshSpectatorControls();
-        
+
+        // Push snapshot into interpolation buffer (keep last 3)
+        this.stateBuffer.push({
+            timestamp: performance.now(),
+            players: new Map(this.players),
+            enemies: new Map(this.enemies)
+        });
+        if (this.stateBuffer.length > 3) this.stateBuffer.shift();
+
         // Update UI
         this.updateUI();
+    }
+
+    getInterpolatedState() {
+        const buf = this.stateBuffer;
+        if (buf.length < 2) return { players: this.players, enemies: this.enemies };
+
+        const renderTime = performance.now() - this.interpolationDelay;
+
+        // Find the two snapshots that bracket renderTime
+        let older = buf[0];
+        let newer = buf[1];
+        for (let i = 1; i < buf.length; i++) {
+            if (buf[i].timestamp <= renderTime) {
+                older = buf[i];
+            } else {
+                newer = buf[i];
+                break;
+            }
+        }
+
+        // If renderTime is ahead of all snapshots, use latest
+        if (newer.timestamp <= renderTime) return { players: newer.players, enemies: newer.enemies };
+
+        const span = newer.timestamp - older.timestamp;
+        const alpha = span > 0 ? Math.max(0, Math.min(1, (renderTime - older.timestamp) / span)) : 1;
+
+        const lerpAngle = (a, b, t) => {
+            let diff = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+            return a + diff * t;
+        };
+
+        const players = new Map();
+        for (const [id, newP] of newer.players) {
+            const oldP = older.players.get(id);
+            // Don't interpolate local player — show their latest server position directly
+            if (!oldP || id === this.playerId) { players.set(id, newP); continue; }
+            players.set(id, { ...newP, x: oldP.x + (newP.x - oldP.x) * alpha, y: oldP.y + (newP.y - oldP.y) * alpha, angle: lerpAngle(oldP.angle || 0, newP.angle || 0, alpha) });
+        }
+
+        const enemies = new Map();
+        for (const [id, newE] of newer.enemies) {
+            const oldE = older.enemies.get(id);
+            if (!oldE) { enemies.set(id, newE); continue; }
+            enemies.set(id, { ...newE, x: oldE.x + (newE.x - oldE.x) * alpha, y: oldE.y + (newE.y - oldE.y) * alpha, angle: lerpAngle(oldE.angle || 0, newE.angle || 0, alpha) });
+        }
+
+        return { players, enemies };
     }
 
     updateUI(playerOverride = null) {
@@ -4537,8 +4596,9 @@ class MultiplayerGame {
         this.drawPowerUps();
         this.drawGrenades();
         this.drawBullets();
-        this.drawEnemies();
-        this.drawPlayers();
+        const { players: interpPlayers, enemies: interpEnemies } = this.getInterpolatedState();
+        this.drawEnemies(interpEnemies);
+        this.drawPlayers(interpPlayers);
         
         // Draw particle effects
         this.particleSystem.render(this.ctx);
@@ -5490,14 +5550,14 @@ class MultiplayerGame {
         });
     }
 
-    drawEnemies() {
-        this.enemies.forEach(enemy => {
+    drawEnemies(enemyMap = this.enemies) {
+        enemyMap.forEach(enemy => {
             this.drawEnemy(enemy);
         });
     }
 
-    drawPlayers() {
-        this.players.forEach(player => {
+    drawPlayers(playerMap = this.players) {
+        playerMap.forEach(player => {
             this.drawPlayer(player, player.id === this.playerId);
         });
     }
