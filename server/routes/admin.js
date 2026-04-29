@@ -10,7 +10,7 @@ const { getAdminUserSnapshot } = require('../auth');
 const { getGameAssetCatalog, buildAdminGameAssetCatalogPayload, resolveAssetRelativePath, writeAssetFile, listAssetDirectory, collectSvgTemplates, setGameAssetMetadataEntry, getGameAssetMetadataEntry, deleteGameAssetMetadataEntry, renameGameAssetMetadataEntry, renameGameAssetMetadataPrefix, invalidateGameAssetCatalog, inferGameAssetCategory, deleteGameAssetMetadataDirectory, ASSETS_ROOT } = require('../assets');
 const { getLeaderboard, getLeaderboardSettings, getAdminLeaderboardEntries, addLeaderboardEntryFromAdmin, clearLeaderboardFromAdmin, updateLeaderboardEntryFromAdmin, deleteLeaderboardEntryFromAdmin } = require('../leaderboard');
 const { sanitizeAssetSlug, humanizeAssetName, isPathInside, toForwardSlashPath, normalizeIpAddress } = require('../utils');
-const { gameRooms, getAdminSummary, getRoomAdminSnapshot, emitRoomState, emitRoomList, blockedIps, disconnectSocketsByIp, disconnectSocketForModeration, kickPlayerSocket } = require('../rooms');
+const { gameRooms, getAdminSummary, getRoomAdminSnapshot, emitRoomState, emitRoomList, blockedIps, disconnectSocketsByIp, disconnectSocketForModeration, kickPlayerSocket, getActiveSocketCountForUser } = require('../rooms');
 const roomsModule = require('../rooms');
 
 // ── Summary ───────────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ function getAdminUsersPayload() {
             if (lt !== rt) return rt - lt;
             return l.username.localeCompare(r.username);
         })
-        .map(getAdminUserSnapshot);
+        .map((u) => getAdminUserSnapshot(u, getActiveSocketCountForUser));
     return {
         ok: true, users,
         availableSkins: skins.map((s) => ({ id: s.id, label: s.label, cost: s.cost })),

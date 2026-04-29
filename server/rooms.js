@@ -216,6 +216,15 @@ function getAdminSummary() {
 
 function getIo() { return _io; }
 
+function getActiveSocketCountForUser(userId) {
+    if (!_io) return 0;
+    let count = 0;
+    for (const socket of _io.sockets.sockets.values()) {
+        if (socket.data?.authUserId === userId) count++;
+    }
+    return count;
+}
+
 function kickPlayerSocket(playerId, roomId, roomName) {
     if (!_io) return false;
     const socket = _io.sockets.sockets.get(playerId);
@@ -242,5 +251,6 @@ module.exports = {
     getRoomAdminSnapshot,
     getAdminSummary,
     getIo,
-    kickPlayerSocket
+    kickPlayerSocket,
+    getActiveSocketCountForUser
 };
