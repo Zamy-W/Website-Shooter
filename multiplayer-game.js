@@ -3725,101 +3725,122 @@ class MultiplayerGame {
             const ac = this.audioCtx;
             if (!ac) return;
             const t = ac.currentTime;
+            const sr = ac.sampleRate;
+
+            // Utility: shaped noise buffer
+            const noiseBuffer = (dur, decay) => {
+                const b = ac.createBuffer(1, sr * dur, sr);
+                const d = b.getChannelData(0);
+                for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * decay));
+                return b;
+            };
+
+            // Utility: play noise layer
+            const noiseLayer = (dur, decay, freq, type, q, vol, dest) => {
+                const src = ac.createBufferSource();
+                src.buffer = noiseBuffer(dur, decay);
+                const filt = ac.createBiquadFilter();
+                filt.type = type; filt.frequency.value = freq; filt.Q.value = q;
+                const g = ac.createGain();
+                g.gain.setValueAtTime(vol, t);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                src.connect(filt); filt.connect(g); g.connect(dest);
+                src.start(t);
+            };
 
             if (soundName === 'pistol_fire') {
-                // Sharp crack: short noise burst + pitched click
-                const buf = ac.createBuffer(1, ac.sampleRate * 0.18, ac.sampleRate);
-                const d = buf.getChannelData(0);
-                for (let i = 0; i < d.length; i++) {
-                    const env = Math.exp(-i / (ac.sampleRate * 0.04));
-                    d[i] = (Math.random() * 2 - 1) * env;
-                }
-                const src = ac.createBufferSource();
-                src.buffer = buf;
-                const gain = ac.createGain();
-                gain.gain.setValueAtTime(0.55, t);
-                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-                const hp = ac.createBiquadFilter();
-                hp.type = 'highpass'; hp.frequency.value = 900;
-                src.connect(hp); hp.connect(gain); gain.connect(ac.destination);
-                src.start(t);
+                // Layer 1: punchy low thump (pressure wave)
+                const thump = ac.createOscillator();
+                thump.type = 'sine';
+                thump.frequency.setValueAtTime(180, t);
+                thump.frequency.exponentialRampToValueAtTime(55, t + 0.08);
+                const thumpG = ac.createGain();
+                thumpG.gain.setValueAtTime(1.1, t);
+                thumpG.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+                thump.connect(thumpG); thumpG.connect(ac.destination);
+                thump.start(t); thump.stop(t + 0.09);
+
+                // Layer 2: high crack (transient noise)
+                noiseLayer(0.06, 0.008, 3500, 'bandpass', 0.8, 1.2, ac.destination);
+
+                // Layer 3: mid body (fuller tone)
+                noiseLayer(0.18, 0.035, 900, 'bandpass', 1.2, 0.6, ac.destination);
+
+                // Layer 4: air/tail (high hiss)
+                noiseLayer(0.22, 0.06, 5000, 'highpass', 0.5, 0.25, ac.destination);
 
             } else if (soundName === 'shotgun_fire') {
-                // Deep boom: low thump + wide noise spread
+                // Layer 1: massive low boom
                 const boom = ac.createOscillator();
-                boom.type = 'sine'; boom.frequency.setValueAtTime(120, t);
-                boom.frequency.exponentialRampToValueAtTime(40, t + 0.25);
-                const boomGain = ac.createGain();
-                boomGain.gain.setValueAtTime(1.1, t);
-                boomGain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-                boom.connect(boomGain); boomGain.connect(ac.destination);
-                boom.start(t); boom.stop(t + 0.28);
+                boom.type = 'sine';
+                boom.frequency.setValueAtTime(100, t);
+                boom.frequency.exponentialRampToValueAtTime(30, t + 0.35);
+                const boomG = ac.createGain();
+                boomG.gain.setValueAtTime(2.0, t);
+                boomG.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+                boom.connect(boomG); boomG.connect(ac.destination);
+                boom.start(t); boom.stop(t + 0.38);
 
-                const buf = ac.createBuffer(1, ac.sampleRate * 0.22, ac.sampleRate);
-                const d = buf.getChannelData(0);
-                for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.06));
-                const ns = ac.createBufferSource(); ns.buffer = buf;
-                const nsGain = ac.createGain();
-                nsGain.gain.setValueAtTime(0.7, t);
-                nsGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-                const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
-                ns.connect(lp); lp.connect(nsGain); nsGain.connect(ac.destination);
-                ns.start(t);
+                // Layer 2: heavy crack transient
+                noiseLayer(0.05, 0.007, 2000, 'bandpass', 0.6, 1.8, ac.destination);
+
+                // Layer 3: wide mid-body roar
+                noiseLayer(0.35, 0.08, 600, 'bandpass', 0.4, 1.1, ac.destination);
+
+                // Layer 4: sub rumble
+                noiseLayer(0.4, 0.12, 120, 'lowpass', 1.0, 0.9, ac.destination);
+
+                // Layer 5: high pellet spread hiss
+                noiseLayer(0.25, 0.055, 4500, 'highpass', 0.5, 0.4, ac.destination);
 
             } else if (soundName === 'rifle_fire') {
-                // Fast mechanical pop with tail
-                const osc = ac.createOscillator();
-                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(280, t);
-                osc.frequency.exponentialRampToValueAtTime(80, t + 0.12);
-                const oscGain = ac.createGain();
-                oscGain.gain.setValueAtTime(0.6, t);
-                oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-                osc.connect(oscGain); oscGain.connect(ac.destination);
-                osc.start(t); osc.stop(t + 0.14);
+                // Layer 1: sharp supersonic crack (very fast transient)
+                noiseLayer(0.04, 0.005, 4000, 'bandpass', 1.0, 1.6, ac.destination);
 
-                const buf = ac.createBuffer(1, ac.sampleRate * 0.12, ac.sampleRate);
-                const d = buf.getChannelData(0);
-                for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.025));
-                const ns = ac.createBufferSource(); ns.buffer = buf;
-                const nsGain = ac.createGain();
-                nsGain.gain.setValueAtTime(0.5, t);
-                nsGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-                const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
-                ns.connect(hp); hp.connect(nsGain); nsGain.connect(ac.destination);
-                ns.start(t);
+                // Layer 2: mechanical mid-punch
+                const punch = ac.createOscillator();
+                punch.type = 'sine';
+                punch.frequency.setValueAtTime(220, t);
+                punch.frequency.exponentialRampToValueAtTime(65, t + 0.1);
+                const punchG = ac.createGain();
+                punchG.gain.setValueAtTime(1.3, t);
+                punchG.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+                punch.connect(punchG); punchG.connect(ac.destination);
+                punch.start(t); punch.stop(t + 0.12);
+
+                // Layer 3: body/echo tail
+                noiseLayer(0.28, 0.055, 1100, 'bandpass', 0.7, 0.7, ac.destination);
+
+                // Layer 4: high-end snap
+                noiseLayer(0.1, 0.015, 6000, 'highpass', 0.5, 0.5, ac.destination);
 
             } else if (soundName === 'sniper_laser') {
-                // Sci-fi zap: rising whine + sharp crack
-                const whine = ac.createOscillator();
-                whine.type = 'sine'; whine.frequency.setValueAtTime(200, t);
-                whine.frequency.exponentialRampToValueAtTime(2400, t + 0.08);
-                whine.frequency.exponentialRampToValueAtTime(400, t + 0.28);
-                const whineGain = ac.createGain();
-                whineGain.gain.setValueAtTime(0.0, t);
-                whineGain.gain.linearRampToValueAtTime(0.7, t + 0.08);
-                whineGain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-                whine.connect(whineGain); whineGain.connect(ac.destination);
-                whine.start(t); whine.stop(t + 0.28);
+                // Layer 1: thunderous low crack (heavy rifle pressure)
+                const boom = ac.createOscillator();
+                boom.type = 'sine';
+                boom.frequency.setValueAtTime(140, t);
+                boom.frequency.exponentialRampToValueAtTime(28, t + 0.45);
+                const boomG = ac.createGain();
+                boomG.gain.setValueAtTime(1.8, t);
+                boomG.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+                boom.connect(boomG); boomG.connect(ac.destination);
+                boom.start(t); boom.stop(t + 0.5);
 
-                const crack = ac.createOscillator();
-                crack.type = 'square'; crack.frequency.setValueAtTime(900, t + 0.08);
-                crack.frequency.exponentialRampToValueAtTime(150, t + 0.22);
-                const crackGain = ac.createGain();
-                crackGain.gain.setValueAtTime(0.5, t + 0.08);
-                crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-                crack.connect(crackGain); crackGain.connect(ac.destination);
-                crack.start(t + 0.08); crack.stop(t + 0.22);
+                // Layer 2: ultra-sharp crack (fastest transient)
+                noiseLayer(0.035, 0.004, 5500, 'bandpass', 0.9, 2.0, ac.destination);
+
+                // Layer 3: long echoing body
+                noiseLayer(0.55, 0.1, 800, 'bandpass', 0.5, 0.9, ac.destination);
+
+                // Layer 4: deep sub punch
+                noiseLayer(0.4, 0.09, 90, 'lowpass', 1.5, 1.0, ac.destination);
+
+                // Layer 5: high-freq whip crack tail
+                noiseLayer(0.18, 0.03, 7000, 'highpass', 0.6, 0.45, ac.destination);
 
             } else {
-                // Generic fallback pop
-                const osc = ac.createOscillator();
-                osc.type = 'sine'; osc.frequency.setValueAtTime(200, t);
-                osc.frequency.exponentialRampToValueAtTime(60, t + 0.1);
-                const g = ac.createGain();
-                g.gain.setValueAtTime(0.4, t);
-                g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-                osc.connect(g); g.connect(ac.destination);
-                osc.start(t); osc.stop(t + 0.1);
+                // Fallback: generic gunshot
+                noiseLayer(0.15, 0.03, 1200, 'bandpass', 0.8, 0.8, ac.destination);
             }
         } catch (e) { /* audio failure is non-fatal */ }
     }
