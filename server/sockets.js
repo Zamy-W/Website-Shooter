@@ -278,7 +278,7 @@ function registerSocketHandlers(io) {
                     return;
                 }
             }
-            socket.emit('lobbyJoined', { roomId: LOBBY_ROOM_ID, playerCount: lobby.players.size });
+            socket.emit('lobbyJoined', { roomId: LOBBY_ROOM_ID, playerId: socket.id, playerCount: lobby.players.size });
             socket.emit('arenaState', lobby.getArenaState());
             // Send recent chat history
             socket.emit('lobbyChatHistory', lobby.chatLog.slice(-50));

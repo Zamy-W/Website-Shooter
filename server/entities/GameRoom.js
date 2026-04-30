@@ -48,11 +48,21 @@ function initGameRoomDeps(deps) {
 
 // Open flat arena for the social lobby — no obstacles, just a large empty floor
 function generateOpenArena() {
-    return { width: 2400, height: 2400, obstacles: [], spawnPoints: [
+    const playerSpawns = [
         { x: 400, y: 400 }, { x: 1200, y: 400 }, { x: 2000, y: 400 },
         { x: 400, y: 1200 }, { x: 1200, y: 1200 }, { x: 2000, y: 1200 },
         { x: 400, y: 2000 }, { x: 1200, y: 2000 }, { x: 2000, y: 2000 }
-    ]};
+    ];
+    return {
+        id: 'lobby-arena', name: 'Social Lobby', themeId: 'lobby', layoutId: 'open',
+        width: 2400, height: 2400,
+        palette: { ground: '#0d1820', accent: '#1a4060', glow: '#7ee8ff' },
+        obstacles: [],
+        decor: [],
+        playerSpawns,
+        spawnPoints: playerSpawns,
+        enemySpawns: []
+    };
 }
 
 class GameRoom {

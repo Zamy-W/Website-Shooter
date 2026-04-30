@@ -2706,11 +2706,15 @@ class MultiplayerGame {
         // ── Social Lobby events ───────────────────────────────────────────────
         this.socket.on('lobbyJoined', (data) => {
             this.isInSocialLobby = true;
+            this.roomId = data.roomId;
+            this.playerId = data.playerId;
             this._showSocialLobbyUI();
         });
 
         this.socket.on('leftLobby', () => {
             this.isInSocialLobby = false;
+            this.playerId = null;
+            this.roomId = null;
             this._hideSocialLobbyUI();
         });
 
