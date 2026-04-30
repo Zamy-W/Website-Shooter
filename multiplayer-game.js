@@ -247,6 +247,9 @@ class MultiplayerGame {
         
         // Audio
         this.audioCtx = null;
+        this._musicNodes = [];
+        this._musicPlaying = false;
+        this._musicScheduler = null;
         this._initAudioCtx = () => {
             if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
@@ -3821,6 +3824,176 @@ class MultiplayerGame {
         } catch (e) { /* audio failure is non-fatal */ }
     }
 
+    startMusic() {
+        if (this._musicPlaying) return;
+        try {
+            this._initAudioCtx();
+            const ac = this.audioCtx;
+            if (!ac) return;
+            this._musicPlaying = true;
+
+            const BPM = 140;
+            const step = 60 / BPM / 4; // 16th note duration in seconds
+            const STEPS = 32; // 2-bar pattern
+
+            // Master gain (music sits under sfx)
+            const master = ac.createGain();
+            master.gain.value = 0.28;
+            master.connect(ac.destination);
+            this._musicMaster = master;
+
+            // Reverb convolver for atmosphere
+            const reverbLen = ac.sampleRate * 1.8;
+            const reverbBuf = ac.createBuffer(2, reverbLen, ac.sampleRate);
+            for (let c = 0; c < 2; c++) {
+                const d = reverbBuf.getChannelData(c);
+                for (let i = 0; i < reverbLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 2.2);
+            }
+            const reverb = ac.createConvolver();
+            reverb.buffer = reverbBuf;
+            const reverbGain = ac.createGain(); reverbGain.gain.value = 0.18;
+            reverb.connect(reverbGain); reverbGain.connect(master);
+
+            // --- Patterns ---
+            // Kick: steps 0,8,16,24
+            const kickSteps  = new Set([0, 8, 16, 24]);
+            // Snare: steps 8, 24
+            const snareSteps = new Set([8, 24]);
+            // Hi-hat: every even step
+            const hatSteps   = new Set([0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30]);
+            // Open hat: steps 6, 14, 22, 30
+            const ohatSteps  = new Set([6, 14, 22, 30]);
+            // Bass notes (MIDI-ish): aggressive minor pattern
+            const bassNotes  = [55,55,null,55, null,55,58,null, 55,55,null,55, null,53,null,52,
+                                 55,55,null,55, null,55,58,null, 60,null,58,null, 57,null,55,null];
+            // Arp lead
+            const arpNotes   = [null,67,null,63, null,67,null,70, null,67,null,63, null,65,null,62,
+                                 null,67,null,63, null,67,null,70, null,72,null,70, null,68,null,67];
+
+            const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+            const scheduleBeat = (stepIdx, when) => {
+                const s = stepIdx % STEPS;
+
+                // Kick drum
+                if (kickSteps.has(s)) {
+                    const osc = ac.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(160, when);
+                    osc.frequency.exponentialRampToValueAtTime(38, when + 0.18);
+                    const g = ac.createGain();
+                    g.gain.setValueAtTime(1.4, when);
+                    g.gain.exponentialRampToValueAtTime(0.001, when + 0.22);
+                    osc.connect(g); g.connect(master);
+                    osc.start(when); osc.stop(when + 0.22);
+                }
+
+                // Snare
+                if (snareSteps.has(s)) {
+                    const buf = ac.createBuffer(1, ac.sampleRate * 0.18, ac.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.045));
+                    const ns = ac.createBufferSource(); ns.buffer = buf;
+                    const g = ac.createGain();
+                    g.gain.setValueAtTime(0.9, when);
+                    g.gain.exponentialRampToValueAtTime(0.001, when + 0.18);
+                    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.7;
+                    ns.connect(bp); bp.connect(g); g.connect(master);
+                    ns.connect(g); // direct + filtered
+                    ns.start(when);
+                    // Snare tone body
+                    const tone = ac.createOscillator(); tone.type = 'triangle'; tone.frequency.value = 220;
+                    const tg = ac.createGain(); tg.gain.setValueAtTime(0.3, when); tg.gain.exponentialRampToValueAtTime(0.001, when + 0.08);
+                    tone.connect(tg); tg.connect(master); tone.start(when); tone.stop(when + 0.08);
+                }
+
+                // Closed hi-hat
+                if (hatSteps.has(s) && !ohatSteps.has(s)) {
+                    const buf = ac.createBuffer(1, ac.sampleRate * 0.04, ac.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.008));
+                    const ns = ac.createBufferSource(); ns.buffer = buf;
+                    const g = ac.createGain(); g.gain.value = 0.22;
+                    const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 8000;
+                    ns.connect(hp); hp.connect(g); g.connect(master);
+                    ns.start(when);
+                }
+
+                // Open hi-hat
+                if (ohatSteps.has(s)) {
+                    const buf = ac.createBuffer(1, ac.sampleRate * 0.18, ac.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.055));
+                    const ns = ac.createBufferSource(); ns.buffer = buf;
+                    const g = ac.createGain(); g.gain.setValueAtTime(0.28, when); g.gain.exponentialRampToValueAtTime(0.001, when + 0.18);
+                    const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
+                    ns.connect(hp); hp.connect(g); g.connect(master);
+                    ns.start(when);
+                }
+
+                // Bass synth
+                const bn = bassNotes[s];
+                if (bn != null) {
+                    const osc = ac.createOscillator(); osc.type = 'sawtooth';
+                    osc.frequency.value = midiToHz(bn);
+                    const g = ac.createGain();
+                    g.gain.setValueAtTime(0.55, when);
+                    g.gain.exponentialRampToValueAtTime(0.001, when + step * 1.8);
+                    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; lp.Q.value = 3;
+                    osc.connect(lp); lp.connect(g); g.connect(master);
+                    osc.start(when); osc.stop(when + step * 1.9);
+                }
+
+                // Arp lead
+                const an = arpNotes[s];
+                if (an != null) {
+                    const osc = ac.createOscillator(); osc.type = 'square';
+                    osc.frequency.value = midiToHz(an);
+                    const g = ac.createGain();
+                    g.gain.setValueAtTime(0.0, when);
+                    g.gain.linearRampToValueAtTime(0.18, when + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.001, when + step * 0.85);
+                    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2800; lp.Q.value = 1.5;
+                    osc.connect(lp); lp.connect(g); g.connect(master);
+                    osc.connect(lp); lp.connect(reverbGain);
+                    osc.start(when); osc.stop(when + step * 0.9);
+                }
+            };
+
+            // Scheduler: look-ahead 200ms, schedule 32 steps ahead
+            let nextStep = 0;
+            let nextStepTime = ac.currentTime + 0.05;
+            const LOOKAHEAD = 0.2;
+
+            const schedule = () => {
+                while (nextStepTime < ac.currentTime + LOOKAHEAD) {
+                    scheduleBeat(nextStep, nextStepTime);
+                    nextStep++;
+                    nextStepTime += step;
+                }
+            };
+
+            schedule();
+            this._musicScheduler = setInterval(() => {
+                if (!this._musicPlaying) { clearInterval(this._musicScheduler); return; }
+                schedule();
+            }, 50);
+
+        } catch (e) { /* music failure is non-fatal */ }
+    }
+
+    stopMusic(fadeDuration = 1.2) {
+        this._musicPlaying = false;
+        if (this._musicScheduler) { clearInterval(this._musicScheduler); this._musicScheduler = null; }
+        try {
+            if (this._musicMaster && this.audioCtx) {
+                const t = this.audioCtx.currentTime;
+                this._musicMaster.gain.setValueAtTime(this._musicMaster.gain.value, t);
+                this._musicMaster.gain.linearRampToValueAtTime(0, t + fadeDuration);
+            }
+        } catch (e) {}
+    }
+
     updateWeaponSystem(deltaTime) {
         if (this.isSpectator || !this.inGame || this.shopState.active) {
             return;
@@ -4383,6 +4556,11 @@ class MultiplayerGame {
             gameCanvas.style.pointerEvents = 'none';
         }
         document.body.classList.add('shop-open');
+        if (this._musicMaster && this.audioCtx) {
+            const t = this.audioCtx.currentTime;
+            this._musicMaster.gain.setValueAtTime(this._musicMaster.gain.value, t);
+            this._musicMaster.gain.linearRampToValueAtTime(0.07, t + 0.4);
+        }
         this.releaseCombatInputForShop();
         this.cancelLocalWeaponCharge();
         this.cancelGrenadeCharge({ silent: true });
@@ -4406,6 +4584,11 @@ class MultiplayerGame {
             gameCanvas.style.pointerEvents = '';
         }
         document.body.classList.remove('shop-open');
+        if (this._musicMaster && this.audioCtx) {
+            const t = this.audioCtx.currentTime;
+            this._musicMaster.gain.setValueAtTime(this._musicMaster.gain.value, t);
+            this._musicMaster.gain.linearRampToValueAtTime(0.28, t + 0.4);
+        }
         this.mouse.pressed = false;
         if (this.pendingPurchase?.timeoutId) {
             window.clearTimeout(this.pendingPurchase.timeoutId);
@@ -6030,6 +6213,7 @@ class MultiplayerGame {
         this.matchOver = false;
         this.hideMatchOver();
         this.hideRespawnOverlay();
+        this.startMusic();
         this.inGame = true;
         this.applyResponsiveLayout();
         this.tryEnterLandscapeMode();
@@ -6277,6 +6461,7 @@ class MultiplayerGame {
     }
 
     showGameOver(finalWave, leaderboard) {
+        this.stopMusic();
         document.getElementById('finalWave').textContent = finalWave;
         
         // Auto-show leaderboard after game ends
@@ -6370,6 +6555,7 @@ class MultiplayerGame {
     }
 
     showPersonalGameOver(endData) {
+        this.stopMusic();
         this.hideDeathScreen();
         
         // Show final results
