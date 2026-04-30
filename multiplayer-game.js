@@ -250,6 +250,13 @@ class MultiplayerGame {
         this._musicNodes = [];
         this._musicPlaying = false;
         this._musicScheduler = null;
+        this._musicMode = 'battle'; // 'battle' or 'lobby'
+        // User preferences from localStorage (mute defaults to ON, volume defaults to 0.4)
+        try { this._musicMuted = localStorage.getItem('musicMuted') !== 'false'; }
+        catch(e) { this._musicMuted = true; }
+        try { this._musicVolume = parseFloat(localStorage.getItem('musicVolume') || '0.4'); }
+        catch(e) { this._musicVolume = 0.4; }
+        if (!isFinite(this._musicVolume)) this._musicVolume = 0.4;
         this._initAudioCtx = () => {
             if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
@@ -3882,26 +3889,33 @@ class MultiplayerGame {
         } catch (e) { /* audio failure is non-fatal */ }
     }
 
-    startMusic() {
-        if (this._musicPlaying) return;
+    startMusic(mode = 'battle') {
+        // If already playing the right mode, do nothing
+        if (this._musicPlaying && this._musicMode === mode) return;
+        // If switching modes, stop current track first
+        if (this._musicPlaying) this.stopMusic(0.4);
+
         try {
             this._initAudioCtx();
             const ac = this.audioCtx;
             if (!ac) return;
+            this._musicMode = mode;
             this._musicPlaying = true;
 
-            const BPM = 140;
-            const step = 60 / BPM / 4; // 16th note duration in seconds
-            const STEPS = 32; // 2-bar pattern
+            const isLobby = mode === 'lobby';
+            const BPM = isLobby ? 80 : 140;
+            const step = 60 / BPM / 4;
+            const STEPS = 32;
 
-            // Master gain (music sits under sfx)
+            // Master gain — respects mute and user volume preference
             const master = ac.createGain();
-            master.gain.value = 0.28;
+            const targetVol = this._musicMuted ? 0 : this._musicVolume;
+            master.gain.value = targetVol;
             master.connect(ac.destination);
             this._musicMaster = master;
 
-            // Reverb convolver for atmosphere
-            const reverbLen = ac.sampleRate * 1.8;
+            // Reverb convolver — longer/bigger for lobby for that "chill space" feel
+            const reverbLen = ac.sampleRate * (isLobby ? 3.0 : 1.8);
             const reverbBuf = ac.createBuffer(2, reverbLen, ac.sampleRate);
             for (let c = 0; c < 2; c++) {
                 const d = reverbBuf.getChannelData(c);
@@ -3909,41 +3923,50 @@ class MultiplayerGame {
             }
             const reverb = ac.createConvolver();
             reverb.buffer = reverbBuf;
-            const reverbGain = ac.createGain(); reverbGain.gain.value = 0.18;
+            const reverbGain = ac.createGain(); reverbGain.gain.value = isLobby ? 0.35 : 0.18;
             reverb.connect(reverbGain); reverbGain.connect(master);
 
-            // --- Patterns ---
-            // Kick: steps 0,8,16,24
-            const kickSteps  = new Set([0, 8, 16, 24]);
-            // Snare: steps 8, 24
-            const snareSteps = new Set([8, 24]);
-            // Hi-hat: every even step
-            const hatSteps   = new Set([0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30]);
-            // Open hat: steps 6, 14, 22, 30
-            const ohatSteps  = new Set([6, 14, 22, 30]);
-            // Bass notes (MIDI-ish): aggressive minor pattern
-            const bassNotes  = [55,55,null,55, null,55,58,null, 55,55,null,55, null,53,null,52,
-                                 55,55,null,55, null,55,58,null, 60,null,58,null, 57,null,55,null];
-            // Arp lead
-            const arpNotes   = [null,67,null,63, null,67,null,70, null,67,null,63, null,65,null,62,
-                                 null,67,null,63, null,67,null,70, null,72,null,70, null,68,null,67];
+            // ── PATTERNS — different for battle vs lobby ──
+            let kickSteps, snareSteps, hatSteps, ohatSteps, bassNotes, arpNotes;
+            if (isLobby) {
+                // Calm chill ambient: minimal beat, slow soft pad notes
+                kickSteps = new Set([0, 16]); // half-time kick (twice per 2 bars)
+                snareSteps = new Set([]); // no snare — keeps it ambient
+                hatSteps = new Set([8, 24]); // soft tick on the off-beat
+                ohatSteps = new Set([]);
+                // Slow ambient bass (long held notes in a peaceful minor)
+                bassNotes = [48,null,null,null, null,null,null,null, 48,null,null,null, null,null,null,null,
+                             50,null,null,null, null,null,null,null, 53,null,null,null, null,null,null,null];
+                // Sparse pad melody — one floating note per bar
+                arpNotes  = [null,null,null,null, 67,null,null,null, null,null,null,null, null,null,null,null,
+                             null,null,null,null, 70,null,null,null, null,null,null,null, 72,null,null,null];
+            } else {
+                kickSteps  = new Set([0, 8, 16, 24]);
+                snareSteps = new Set([8, 24]);
+                hatSteps   = new Set([0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30]);
+                ohatSteps  = new Set([6, 14, 22, 30]);
+                bassNotes  = [55,55,null,55, null,55,58,null, 55,55,null,55, null,53,null,52,
+                              55,55,null,55, null,55,58,null, 60,null,58,null, 57,null,55,null];
+                arpNotes   = [null,67,null,63, null,67,null,70, null,67,null,63, null,65,null,62,
+                              null,67,null,63, null,67,null,70, null,72,null,70, null,68,null,67];
+            }
 
             const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
             const scheduleBeat = (stepIdx, when) => {
                 const s = stepIdx % STEPS;
 
-                // Kick drum
+                // Kick drum (softer for lobby)
                 if (kickSteps.has(s)) {
                     const osc = ac.createOscillator();
                     osc.type = 'sine';
-                    osc.frequency.setValueAtTime(160, when);
-                    osc.frequency.exponentialRampToValueAtTime(38, when + 0.18);
+                    osc.frequency.setValueAtTime(isLobby ? 100 : 160, when);
+                    osc.frequency.exponentialRampToValueAtTime(isLobby ? 28 : 38, when + (isLobby ? 0.4 : 0.18));
                     const g = ac.createGain();
-                    g.gain.setValueAtTime(1.4, when);
-                    g.gain.exponentialRampToValueAtTime(0.001, when + 0.22);
+                    g.gain.setValueAtTime(isLobby ? 0.6 : 1.4, when);
+                    g.gain.exponentialRampToValueAtTime(0.001, when + (isLobby ? 0.45 : 0.22));
                     osc.connect(g); g.connect(master);
-                    osc.start(when); osc.stop(when + 0.22);
+                    osc.start(when); osc.stop(when + (isLobby ? 0.45 : 0.22));
                 }
 
                 // Snare
@@ -3989,32 +4012,57 @@ class MultiplayerGame {
                     ns.start(when);
                 }
 
-                // Bass synth
+                // Bass synth — sine pad in lobby, gritty saw in battle
                 const bn = bassNotes[s];
                 if (bn != null) {
-                    const osc = ac.createOscillator(); osc.type = 'sawtooth';
+                    const osc = ac.createOscillator();
+                    osc.type = isLobby ? 'sine' : 'sawtooth';
                     osc.frequency.value = midiToHz(bn);
                     const g = ac.createGain();
-                    g.gain.setValueAtTime(0.55, when);
-                    g.gain.exponentialRampToValueAtTime(0.001, when + step * 1.8);
-                    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; lp.Q.value = 3;
-                    osc.connect(lp); lp.connect(g); g.connect(master);
-                    osc.start(when); osc.stop(when + step * 1.9);
+                    if (isLobby) {
+                        const sustain = step * 14;
+                        g.gain.setValueAtTime(0, when);
+                        g.gain.linearRampToValueAtTime(0.35, when + 0.4);
+                        g.gain.linearRampToValueAtTime(0.25, when + sustain - 0.6);
+                        g.gain.exponentialRampToValueAtTime(0.001, when + sustain);
+                        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 280; lp.Q.value = 0.8;
+                        osc.connect(lp); lp.connect(g); g.connect(master);
+                        osc.start(when); osc.stop(when + sustain + 0.1);
+                    } else {
+                        g.gain.setValueAtTime(0.55, when);
+                        g.gain.exponentialRampToValueAtTime(0.001, when + step * 1.8);
+                        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; lp.Q.value = 3;
+                        osc.connect(lp); lp.connect(g); g.connect(master);
+                        osc.start(when); osc.stop(when + step * 1.9);
+                    }
                 }
 
-                // Arp lead
+                // Arp/pad lead — soft sine pad in lobby, sharp square arp in battle
                 const an = arpNotes[s];
                 if (an != null) {
-                    const osc = ac.createOscillator(); osc.type = 'square';
+                    const osc = ac.createOscillator();
+                    osc.type = isLobby ? 'sine' : 'square';
                     osc.frequency.value = midiToHz(an);
                     const g = ac.createGain();
-                    g.gain.setValueAtTime(0.0, when);
-                    g.gain.linearRampToValueAtTime(0.18, when + 0.01);
-                    g.gain.exponentialRampToValueAtTime(0.001, when + step * 0.85);
-                    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2800; lp.Q.value = 1.5;
-                    osc.connect(lp); lp.connect(g); g.connect(master);
-                    osc.connect(lp); lp.connect(reverbGain);
-                    osc.start(when); osc.stop(when + step * 0.9);
+                    if (isLobby) {
+                        const sustain = step * 7;
+                        g.gain.setValueAtTime(0, when);
+                        g.gain.linearRampToValueAtTime(0.16, when + 0.6);
+                        g.gain.linearRampToValueAtTime(0.10, when + sustain - 0.5);
+                        g.gain.exponentialRampToValueAtTime(0.001, when + sustain);
+                        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1600; lp.Q.value = 0.6;
+                        osc.connect(lp); lp.connect(g); g.connect(master);
+                        lp.connect(reverbGain);
+                        osc.start(when); osc.stop(when + sustain + 0.1);
+                    } else {
+                        g.gain.setValueAtTime(0.0, when);
+                        g.gain.linearRampToValueAtTime(0.18, when + 0.01);
+                        g.gain.exponentialRampToValueAtTime(0.001, when + step * 0.85);
+                        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2800; lp.Q.value = 1.5;
+                        osc.connect(lp); lp.connect(g); g.connect(master);
+                        osc.connect(lp); lp.connect(reverbGain);
+                        osc.start(when); osc.stop(when + step * 0.9);
+                    }
                 }
             };
 
@@ -4041,6 +4089,29 @@ class MultiplayerGame {
     }
 
     toggleMute() {
+        this._initAudioCtx();
+        this._musicMuted = !this._musicMuted;
+        try { localStorage.setItem('musicMuted', String(this._musicMuted)); } catch(e) {}
+        this._applyMusicVolume();
+        const btn = document.getElementById('muteBtn');
+        if (btn) btn.textContent = this._musicMuted ? '🔇' : '🔊';
+    }
+
+    setMusicVolume(v) {
+        this._musicVolume = Math.max(0, Math.min(1, parseFloat(v) || 0));
+        try { localStorage.setItem('musicVolume', String(this._musicVolume)); } catch(e) {}
+        this._applyMusicVolume();
+    }
+
+    _applyMusicVolume() {
+        if (!this._musicMaster || !this.audioCtx) return;
+        const t = this.audioCtx.currentTime;
+        const target = this._musicMuted ? 0 : this._musicVolume;
+        this._musicMaster.gain.setValueAtTime(this._musicMaster.gain.value, t);
+        this._musicMaster.gain.linearRampToValueAtTime(target, t + 0.3);
+    }
+
+    _legacyToggleMute_unused() {
         const btn = document.getElementById('muteBtn');
         if (!this._musicMaster || !this.audioCtx) return;
         const t = this.audioCtx.currentTime;
@@ -4490,7 +4561,7 @@ class MultiplayerGame {
         if (ls) ls.style.display = 'none';
         this.inGame = true;
         this.applyResponsiveLayout();
-        this.startMusic();
+        this.startMusic('lobby');
     }
 
     _hideSocialLobbyUI() {
@@ -6378,7 +6449,7 @@ class MultiplayerGame {
         this.matchOver = false;
         this.hideMatchOver();
         this.hideRespawnOverlay();
-        this.startMusic();
+        this.startMusic('battle');
         this.inGame = true;
         this.applyResponsiveLayout();
         this.tryEnterLandscapeMode();
@@ -7378,6 +7449,11 @@ class ShellCasing {
 // Initialize the multiplayer game when the page loads
 window.addEventListener('load', () => {
     window.game = new MultiplayerGame(window.GAME_BOOTSTRAP || {});
+    // Sync audio control UI with stored preferences
+    const muteBtn = document.getElementById('muteBtn');
+    const slider = document.getElementById('volumeSlider');
+    if (muteBtn) muteBtn.textContent = window.game._musicMuted ? '🔇' : '🔊';
+    if (slider) slider.value = Math.round(window.game._musicVolume * 100);
     
     // Hide the game container initially
     const gameContainer = document.getElementById('gameContainer');
