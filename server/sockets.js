@@ -15,7 +15,23 @@ const {
 // blockNewConnections is accessed via the module object so setter/getter works
 const roomsModule = require('./rooms');
 
+const LOBBY_ROOM_ID = 'persistent-lobby';
+const LOBBY_ROOM_NAME = '🏠 Social Lobby';
+
+function ensureLobbyRoom() {
+    if (!gameRooms.has(LOBBY_ROOM_ID)) {
+        const lobby = new GameRoom(LOBBY_ROOM_ID, LOBBY_ROOM_NAME, { mode: 'lobby' });
+        lobby.gameStarted = true;
+        lobby.lastUpdateTime = Date.now();
+        gameRooms.set(LOBBY_ROOM_ID, lobby);
+        console.log('Social Lobby created');
+    }
+    return gameRooms.get(LOBBY_ROOM_ID);
+}
+
 function registerSocketHandlers(io) {
+    ensureLobbyRoom();
+
     io.on('connection', (socket) => {
         socket.data = socket.data || {};
         socket.data.clientIp = getClientIp(socket);
@@ -242,6 +258,74 @@ function registerSocketHandlers(io) {
             }
         });
 
+        // ── Social Lobby ──────────────────────────────────────────────────────────
+
+        socket.on('joinLobby', (playerName, skinTheme, selectedWeapon) => {
+            const lobby = ensureLobbyRoom();
+            // Leave any active game room first
+            for (const [rid, room] of gameRooms) {
+                if (rid !== LOBBY_ROOM_ID && room.players.has(socket.id)) {
+                    room.removePlayer(socket.id);
+                    socket.leave(rid);
+                    emitRoomState(room);
+                    if (room.players.size === 0 && !room.isLobbyMode()) gameRooms.delete(rid);
+                    emitRoomList();
+                }
+            }
+            if (!lobby.players.has(socket.id)) {
+                if (!lobby.addPlayer(socket, playerName, skinTheme, selectedWeapon)) {
+                    socket.emit('joinRoomFailed', 'Lobby is full');
+                    return;
+                }
+            }
+            socket.emit('lobbyJoined', { roomId: LOBBY_ROOM_ID, playerCount: lobby.players.size });
+            socket.emit('arenaState', lobby.getArenaState());
+            // Send recent chat history
+            socket.emit('lobbyChatHistory', lobby.chatLog.slice(-50));
+            socket.to(LOBBY_ROOM_ID).emit('lobbyChatMessage', {
+                system: true, text: `${playerName} joined the lobby`, ts: Date.now()
+            });
+            emitRoomState(lobby);
+        });
+
+        socket.on('leaveLobby', () => {
+            const lobby = gameRooms.get(LOBBY_ROOM_ID);
+            if (lobby && lobby.players.has(socket.id)) {
+                const player = lobby.players.get(socket.id);
+                const name = player?.name || 'A player';
+                lobby.removePlayer(socket.id);
+                socket.leave(LOBBY_ROOM_ID);
+                io.to(LOBBY_ROOM_ID).emit('lobbyChatMessage', {
+                    system: true, text: `${name} left the lobby`, ts: Date.now()
+                });
+                emitRoomState(lobby);
+            }
+            socket.emit('leftLobby');
+            emitRoomList(socket);
+        });
+
+        socket.on('lobbyChat', (text) => {
+            const lobby = gameRooms.get(LOBBY_ROOM_ID);
+            if (!lobby || !lobby.players.has(socket.id)) return;
+            const player = lobby.players.get(socket.id);
+            const safe = String(text || '').trim().slice(0, 200);
+            if (!safe) return;
+            const msg = { playerId: socket.id, playerName: player.name, text: safe, ts: Date.now() };
+            lobby.chatLog.push(msg);
+            if (lobby.chatLog.length > 100) lobby.chatLog.shift();
+            io.to(LOBBY_ROOM_ID).emit('lobbyChatMessage', msg);
+        });
+
+        socket.on('lobbyUpdateAppearance', (skinTheme, weaponType) => {
+            const lobby = gameRooms.get(LOBBY_ROOM_ID);
+            if (lobby) lobby.applyLobbyAppearance(socket.id, skinTheme, weaponType);
+        });
+
+        socket.on('getLobbyInfo', () => {
+            const lobby = gameRooms.get(LOBBY_ROOM_ID);
+            socket.emit('lobbyInfo', { playerCount: lobby ? lobby.players.size : 0 });
+        });
+
         socket.on('disconnect', () => {
             console.log(`Player disconnected: ${socket.id} (Remaining clients: ${io.engine.clientsCount - 1})`);
 
@@ -262,10 +346,10 @@ function registerSocketHandlers(io) {
                         addToLeaderboard(player.accountUsername || player.name, player.score, room.wave, { accountUserId: player.accountUserId });
                     }
                     room.removePlayer(socket.id);
-                    if (room.players.size === 0 && room.gameStarted) room.endGame();
+                    if (room.players.size === 0 && room.gameStarted && !room.isLobbyMode()) room.endGame();
                     socket.to(roomId).emit('playerLeft', socket.id);
                     emitRoomState(room);
-                    if (room.players.size === 0) gameRooms.delete(roomId);
+                    if (room.players.size === 0 && !room.isLobbyMode()) gameRooms.delete(roomId);
                     emitRoomList();
                     break;
                 }

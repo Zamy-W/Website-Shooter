@@ -57,7 +57,8 @@ const GAME_CONFIG = {
 
 const ROOM_MODES = {
     PVE: 'pve',
-    PVP_FFA: 'pvp_ffa'
+    PVP_FFA: 'pvp_ffa',
+    LOBBY: 'lobby'
 };
 
 const PVP_CONFIG = {

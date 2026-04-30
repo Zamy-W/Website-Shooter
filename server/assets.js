@@ -217,6 +217,7 @@ function normalizeWeaponType(value) {
 
 function normalizeRoomMode(value) {
     const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (raw === ROOM_MODES.LOBBY) return ROOM_MODES.LOBBY;
     if (raw === ROOM_MODES.PVP_FFA || raw === 'pvp' || raw === 'ffa' || raw === 'pvpffa') return ROOM_MODES.PVP_FFA;
     return ROOM_MODES.PVE;
 }

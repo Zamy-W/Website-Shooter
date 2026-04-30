@@ -88,7 +88,7 @@ function serializeRoomSummary(room) {
 }
 
 function emitRoomList(target = null) {
-    (target || _io).emit('roomList', Array.from(gameRooms.values()).map(serializeRoomSummary));
+    (target || _io).emit('roomList', Array.from(gameRooms.values()).filter(r => !r.isLobbyMode()).map(serializeRoomSummary));
 }
 
 function emitRoomState(room) {

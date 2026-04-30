@@ -276,6 +276,9 @@ class MultiplayerGame {
         // Interpolation buffer: stores last 3 server snapshots for smooth rendering
         this.stateBuffer = [];
         this.interpolationDelay = 100; // render 100ms behind to interpolate between snapshots
+
+        // Social lobby
+        this.isInSocialLobby = false;
         this.wave = 1;
         this.waveInfo = {
             bossWave: false,
@@ -1585,6 +1588,10 @@ class MultiplayerGame {
         const hasIdentity = effectiveName.length >= 2;
         playerInfo.style.display = hasIdentity ? 'none' : 'block';
         roomControls.style.display = hasIdentity ? 'block' : 'none';
+        const lobbyEntry = document.getElementById('socialLobbyEntry');
+        if (lobbyEntry) lobbyEntry.style.display = hasIdentity ? 'block' : 'none';
+        // Poll lobby player count
+        if (hasIdentity && this.socket) this.socket.emit('getLobbyInfo');
     }
 
     isSkinUnlocked(skinTheme) {
@@ -1853,6 +1860,7 @@ class MultiplayerGame {
             });
             this.setProfile(data.profile);
             this.setAuthStatus(`${this.skinCatalog[skinTheme]?.label || 'Skin'} selected.`, 'success');
+            if (this.isInSocialLobby) this.socket.emit('lobbyUpdateAppearance', this.selectedSkin, this.selectedLoadoutWeapon);
         } catch (error) {
             this.setAuthStatus(error.message, 'error');
         }
@@ -2687,6 +2695,35 @@ class MultiplayerGame {
         this.socket.on('gameState', (gameState) => {
             this.updateGameState(gameState);
         });
+
+        // ── Social Lobby events ───────────────────────────────────────────────
+        this.socket.on('lobbyJoined', (data) => {
+            this.isInSocialLobby = true;
+            this._showSocialLobbyUI();
+        });
+
+        this.socket.on('leftLobby', () => {
+            this.isInSocialLobby = false;
+            this._hideSocialLobbyUI();
+        });
+
+        this.socket.on('lobbyChatMessage', (msg) => {
+            this._appendLobbyChat(msg);
+        });
+
+        this.socket.on('lobbyChatHistory', (history) => {
+            const log = document.getElementById('lobbyChatLog');
+            if (log) log.innerHTML = '';
+            (history || []).forEach(msg => this._appendLobbyChat(msg));
+        });
+
+        this.socket.on('lobbyInfo', (info) => {
+            const badge = document.getElementById('lobbyPlayerBadge');
+            if (badge) badge.textContent = `${info.playerCount} online`;
+            const count = document.getElementById('lobbyOnlineCount');
+            if (count) count.textContent = `${info.playerCount} player${info.playerCount !== 1 ? 's' : ''} online`;
+        });
+        // ─────────────────────────────────────────────────────────────────────
 
         this.socket.on('waveStart', (waveData) => {
             console.log(`Wave ${waveData.wave} started! ${waveData.enemyCount} enemies incoming`);
@@ -4405,6 +4442,96 @@ class MultiplayerGame {
 
         return { players, enemies };
     }
+
+    // ── Social Lobby methods ──────────────────────────────────────────────────
+
+    joinSocialLobby() {
+        const name = this.playerName || this.profile?.username;
+        if (!name) { alert('Set your name first.'); return; }
+        this.socket.emit('joinLobby', name, this.selectedSkin || 'player1', this.currentWeapon || 'pistol');
+    }
+
+    leaveSocialLobby(goToGame = false) {
+        this.socket.emit('leaveLobby');
+        if (goToGame) {
+            // Small delay so leftLobby arrives and UI resets, then scroll to rooms
+            setTimeout(() => {
+                const roomControls = document.getElementById('roomControls');
+                if (roomControls) roomControls.scrollIntoView({ behavior: 'smooth' });
+            }, 300);
+        }
+    }
+
+    sendLobbyChat() {
+        const input = document.getElementById('lobbyChatInput');
+        if (!input || !input.value.trim()) return;
+        this.socket.emit('lobbyChat', input.value.trim());
+        input.value = '';
+    }
+
+    openGearShopFromLobby() {
+        // Reuse existing gear shop; wire appearance update on close
+        this._lobbyOpenedShop = true;
+        if (typeof openGearShop === 'function') openGearShop();
+    }
+
+    _showSocialLobbyUI() {
+        // Show the fixed side panel
+        const panel = document.getElementById('socialLobbyPanel');
+        if (panel) { panel.style.display = 'flex'; }
+        document.getElementById('socialLobbyEntry').style.display = 'none';
+        const log = document.getElementById('lobbyChatLog');
+        if (log) log.innerHTML = '';
+        // Shrink game canvas to leave room for the 300px side panel
+        const gc = document.getElementById('gameContainer');
+        if (gc) { gc.style.marginRight = '300px'; gc.style.display = 'block'; }
+        // Hide the lobby screen, show canvas
+        const ls = document.getElementById('lobbyScreen');
+        if (ls) ls.style.display = 'none';
+        this.inGame = true;
+        this.applyResponsiveLayout();
+        this.startMusic();
+    }
+
+    _hideSocialLobbyUI() {
+        const panel = document.getElementById('socialLobbyPanel');
+        if (panel) panel.style.display = 'none';
+        const gc = document.getElementById('gameContainer');
+        if (gc) { gc.style.marginRight = ''; gc.style.display = 'none'; }
+        const ls = document.getElementById('lobbyScreen');
+        if (ls) ls.style.display = '';
+        const hasIdentity = (this.playerName || '').length >= 2 || (this.profile?.username || '').length >= 2;
+        document.getElementById('socialLobbyEntry').style.display = hasIdentity ? 'block' : 'none';
+        document.getElementById('roomControls').style.display = hasIdentity ? 'block' : 'none';
+        this.inGame = false;
+        this.stateBuffer = [];
+        this.players.clear();
+        this.enemies.clear();
+        this.stopMusic();
+        this.socket.emit('getLobbyInfo');
+    }
+
+    _appendLobbyChat(msg) {
+        const log = document.getElementById('lobbyChatLog');
+        if (!log) return;
+        const line = document.createElement('div');
+        line.style.cssText = 'font-size:13px; line-height:1.4; word-break:break-word;';
+        if (msg.system) {
+            line.style.color = '#5a8a9a';
+            line.style.fontStyle = 'italic';
+            line.textContent = msg.text;
+        } else {
+            line.innerHTML = `<span style="color:#7ee8ff;font-weight:600;">${this._escapeChatHtml(msg.playerName)}</span><span style="color:#556;"> › </span><span style="color:#cde;">${this._escapeChatHtml(msg.text)}</span>`;
+        }
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    _escapeChatHtml(str) {
+        return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     updateUI(playerOverride = null) {
         const ammoElement = document.getElementById('currentAmmo');

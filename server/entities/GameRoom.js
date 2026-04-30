@@ -46,6 +46,15 @@ function initGameRoomDeps(deps) {
     _getLeaderboard = deps.getLeaderboard;
 }
 
+// Open flat arena for the social lobby — no obstacles, just a large empty floor
+function generateOpenArena() {
+    return { width: 2400, height: 2400, obstacles: [], spawnPoints: [
+        { x: 400, y: 400 }, { x: 1200, y: 400 }, { x: 2000, y: 400 },
+        { x: 400, y: 1200 }, { x: 1200, y: 1200 }, { x: 2000, y: 1200 },
+        { x: 400, y: 2000 }, { x: 1200, y: 2000 }, { x: 2000, y: 2000 }
+    ]};
+}
+
 class GameRoom {
     constructor(id, name, options = {}) {
         this.id = id;
@@ -90,10 +99,13 @@ class GameRoom {
         this.shopEndTime = 0;
         this.shopDurationMs = 15000;
         this.endMatchVotes = new Set();
-        this.arena = generateArenaDefinition();
+        this.chatLog = []; // lobby chat history (last 50 messages)
+        // Lobby: use an open arena with no obstacles so players can freely roam
+        this.arena = this.mode === ROOM_MODES.LOBBY ? generateOpenArena() : generateArenaDefinition();
     }
 
     isPvpMode() { return this.mode === ROOM_MODES.PVP_FFA; }
+    isLobbyMode() { return this.mode === ROOM_MODES.LOBBY; }
 
     getMatchState(now = Date.now()) {
         if (!this.isPvpMode()) return { mode: ROOM_MODES.PVE };
@@ -192,7 +204,8 @@ class GameRoom {
     }
 
     addPlayer(socket, playerName, skinTheme = null, selectedWeapon = null) {
-        if (this.players.size >= GAME_CONFIG.maxPlayersPerRoom) return false;
+        const maxPlayers = this.isLobbyMode() ? 50 : GAME_CONFIG.maxPlayersPerRoom;
+        if (this.players.size >= maxPlayers) return false;
 
         const spawnIndex = this.players.size;
         const spawnPoint = this.getPlayerSpawnPointByIndex(spawnIndex);
@@ -668,6 +681,9 @@ class GameRoom {
 
         for (const player of this.players.values()) player.update(deltaTime, this.arena);
 
+        // Lobby: skip all combat — just move players
+        if (this.isLobbyMode()) return;
+
         if (this.isPvpMode()) {
             for (const player of this.players.values()) {
                 if (!player.alive && player.respawnAt && now >= player.respawnAt) {
@@ -870,7 +886,16 @@ class GameRoom {
         return { ok: true, upgradeType: normalizedUpgradeType, player: player.serialize() };
     }
 
+    applyLobbyAppearance(socketId, skinTheme, weaponType) {
+        if (!this.isLobbyMode()) return;
+        const player = this.players.get(socketId);
+        if (!player) return;
+        if (skinTheme) player.skinTheme = _normalizeSkinTheme(skinTheme);
+        if (weaponType) player.currentWeapon = _normalizeWeaponType(weaponType);
+    }
+
     startGame() {
+        if (this.isLobbyMode()) return; // lobby is always "started", never formally begun
         this.arena = generateArenaDefinition();
         const now = Date.now();
         this.gameStarted = true;
