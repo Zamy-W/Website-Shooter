@@ -3982,6 +3982,23 @@ class MultiplayerGame {
         } catch (e) { /* music failure is non-fatal */ }
     }
 
+    toggleMute() {
+        const btn = document.getElementById('muteBtn');
+        if (!this._musicMaster || !this.audioCtx) return;
+        const t = this.audioCtx.currentTime;
+        if (this._muted) {
+            this._muted = false;
+            this._musicMaster.gain.setValueAtTime(0, t);
+            this._musicMaster.gain.linearRampToValueAtTime(0.28, t + 0.3);
+            if (btn) btn.textContent = '🔊';
+        } else {
+            this._muted = true;
+            this._musicMaster.gain.setValueAtTime(this._musicMaster.gain.value, t);
+            this._musicMaster.gain.linearRampToValueAtTime(0, t + 0.3);
+            if (btn) btn.textContent = '🔇';
+        }
+    }
+
     stopMusic(fadeDuration = 1.2) {
         this._musicPlaying = false;
         if (this._musicScheduler) { clearInterval(this._musicScheduler); this._musicScheduler = null; }

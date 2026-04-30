@@ -1783,6 +1783,14 @@
             </div>
         </div>
 
+        <button id="muteBtn" onclick="window.game && window.game.toggleMute()" title="Mute/Unmute music" style="
+            position: absolute; top: 10px; right: 10px; z-index: 100;
+            background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18);
+            color: #fff; font-size: 18px; width: 36px; height: 36px;
+            border-radius: 8px; cursor: pointer; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+        ">🔊</button>
+
         <div id="gameOver">
             <h2>Game Over!</h2>
             <p>Final Score: <span id="finalScore">0</span></p>
