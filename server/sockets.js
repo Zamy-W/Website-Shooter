@@ -285,6 +285,8 @@ function registerSocketHandlers(io) {
             socket.to(LOBBY_ROOM_ID).emit('lobbyChatMessage', {
                 system: true, text: `${playerName} joined the lobby`, ts: Date.now()
             });
+            // Broadcast updated count to ALL clients so the entry-screen badge is always current
+            io.emit('lobbyInfo', { playerCount: lobby.players.size });
             emitRoomState(lobby);
         });
 
@@ -298,6 +300,8 @@ function registerSocketHandlers(io) {
                 io.to(LOBBY_ROOM_ID).emit('lobbyChatMessage', {
                     system: true, text: `${name} left the lobby`, ts: Date.now()
                 });
+                // Broadcast updated player count to ALL connected clients (badge visible even outside lobby)
+                io.emit('lobbyInfo', { playerCount: lobby.players.size });
                 emitRoomState(lobby);
             }
             socket.emit('leftLobby');
@@ -349,7 +353,12 @@ function registerSocketHandlers(io) {
                     if (room.players.size === 0 && room.gameStarted && !room.isLobbyMode()) room.endGame();
                     socket.to(roomId).emit('playerLeft', socket.id);
                     emitRoomState(room);
-                    if (room.players.size === 0 && !room.isLobbyMode()) gameRooms.delete(roomId);
+                    if (room.isLobbyMode()) {
+                        // Broadcast updated count to ALL connected clients (badge visible even outside lobby)
+                        io.emit('lobbyInfo', { playerCount: room.players.size });
+                    } else {
+                        if (room.players.size === 0) gameRooms.delete(roomId);
+                    }
                     emitRoomList();
                     break;
                 }

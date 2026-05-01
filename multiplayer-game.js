@@ -3576,7 +3576,7 @@ class MultiplayerGame {
     }
 
     requestGrenadeThrow(options = {}) {
-        if (this.isSpectator || !this.inGame || this.shopState.active || !this.socket) {
+        if (this.isSpectator || !this.inGame || this.shopState.active || !this.socket || this.isInSocialLobby) {
             return;
         }
 
@@ -3645,6 +3645,11 @@ class MultiplayerGame {
 
     fireWeapon(options = {}) {
         if (this.isSpectator) {
+            return;
+        }
+
+        // No shooting in the social lobby
+        if (this.isInSocialLobby) {
             return;
         }
 

@@ -330,6 +330,7 @@ class GameRoom {
     }
 
     playerShoot(socketId, weaponType = null) {
+        if (this.isLobbyMode()) return { ok: false, reason: 'Cannot shoot in the lobby' };
         const player = this.players.get(socketId);
         if (!this.gameStarted || !player || !player.alive || this.shopPhase) {
             return { ok: false, reason: 'Cannot fire right now' };
@@ -430,6 +431,7 @@ class GameRoom {
     }
 
     throwGrenade(socketId, options = {}) {
+        if (this.isLobbyMode()) return { ok: false, reason: 'Cannot throw grenades in the lobby' };
         const player = this.players.get(socketId);
         if (!this.gameStarted || !player || !player.alive || this.shopPhase) {
             return { ok: false, reason: 'Cannot throw a grenade right now' };
@@ -691,8 +693,11 @@ class GameRoom {
 
         for (const player of this.players.values()) player.update(deltaTime, this.arena);
 
-        // Lobby: skip all combat — just move players
-        if (this.isLobbyMode()) return;
+        // Lobby: skip all combat — just move players; discard any stray bullets
+        if (this.isLobbyMode()) {
+            if (this.bullets.size > 0) this.bullets.clear();
+            return;
+        }
 
         if (this.isPvpMode()) {
             for (const player of this.players.values()) {
