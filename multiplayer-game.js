@@ -2738,6 +2738,22 @@ class MultiplayerGame {
             const count = document.getElementById('lobbyOnlineCount');
             if (count) count.textContent = `${info.playerCount} player${info.playerCount !== 1 ? 's' : ''} online`;
         });
+
+        this.socket.on('lobbyPlayerProfile', (data) => {
+            if (data) this._renderLobbyPlayerPopup(data);
+        });
+
+        this.socket.on('friendList', (friends) => {
+            this._cachedFriendList = friends || [];
+            this.renderFriendList(this._cachedFriendList);
+        });
+
+        this.socket.on('friendActionResult', (result) => {
+            if (!result.ok) {
+                // show briefly in chat log area or console
+                console.warn('Friend action failed:', result.reason);
+            }
+        });
         // ─────────────────────────────────────────────────────────────────────
 
         this.socket.on('waveStart', (waveData) => {
@@ -4478,6 +4494,7 @@ class MultiplayerGame {
 
         // Update UI
         this.updateUI();
+        if (this.isInSocialLobby) this.renderLobbyPlayerList();
     }
 
     getInterpolatedState() {
@@ -4574,9 +4591,15 @@ class MultiplayerGame {
         this.inGame = true;
         this.applyResponsiveLayout();
         this.startMusic('lobby');
+        this.refreshFriends();
     }
 
     _hideSocialLobbyUI() {
+        this.closeLobbyPlayerPopup();
+        const pl = document.getElementById('lobbyPlayerList');
+        if (pl) pl.innerHTML = '';
+        const fl = document.getElementById('lobbyFriendList');
+        if (fl) fl.innerHTML = '';
         const panel = document.getElementById('socialLobbyPanel');
         if (panel) panel.style.display = 'none';
         const gc = document.getElementById('gameContainer');
@@ -4612,6 +4635,141 @@ class MultiplayerGame {
 
     _escapeChatHtml(str) {
         return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Friend list & player profile ─────────────────────────────────────────
+
+    getLobbyPlayerProfile(socketId) {
+        if (!this.socket) return;
+        this.socket.emit('getLobbyPlayerProfile', socketId);
+    }
+
+    addLobbyFriend(targetSocketId) {
+        if (!this.socket) return;
+        this.socket.emit('addLobbyFriend', targetSocketId);
+    }
+
+    removeFriend(userId) {
+        if (!this.socket || !userId) return;
+        if (!confirm('Remove this friend?')) return;
+        this.socket.emit('removeFriend', userId);
+    }
+
+    refreshFriends() {
+        if (this.socket && this.isInSocialLobby) this.socket.emit('getFriends');
+    }
+
+    renderLobbyPlayerList() {
+        const list = document.getElementById('lobbyPlayerList');
+        if (!list) return;
+        const players = this.players; // Map of playerId -> player data
+        if (!players || players.size === 0) {
+            list.innerHTML = '<div style="padding:8px; font-size:12px; color:#4a6a7a; text-align:center;">No players</div>';
+            return;
+        }
+        list.innerHTML = '';
+        for (const [id, p] of players) {
+            const isSelf = id === this.playerId;
+            const btn = document.createElement('button');
+            btn.style.cssText = 'display:block; width:100%; text-align:left; background:none; border:none; color:' +
+                (isSelf ? '#7ee8ff' : '#c8e8ff') + '; padding:5px 10px; cursor:pointer; font-size:12px; font-family:inherit;';
+            btn.textContent = (isSelf ? '▶ ' : '') + (p.name || id);
+            btn.title = 'Click to view profile';
+            btn.onmouseenter = () => { btn.style.background = 'rgba(100,180,220,0.08)'; };
+            btn.onmouseleave = () => { btn.style.background = 'none'; };
+            btn.onclick = () => {
+                const rect = btn.getBoundingClientRect();
+                this._showLobbyPlayerPopup(id, rect);
+            };
+            list.appendChild(btn);
+        }
+    }
+
+    renderFriendList(friends) {
+        const list = document.getElementById('lobbyFriendList');
+        if (!list) return;
+        if (!friends || friends.length === 0) {
+            list.innerHTML = '<div style="padding:8px; font-size:12px; color:#4a6a7a; text-align:center;">No friends yet</div>';
+            return;
+        }
+        list.innerHTML = '';
+        for (const f of friends) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:5px 10px; font-size:12px;';
+            const dot = f.isOnline ? '🟢' : '⚫';
+            const nameSpan = document.createElement('span');
+            nameSpan.style.color = f.isOnline ? '#7ee8ff' : '#5a7a8a';
+            nameSpan.textContent = dot + ' ' + f.username;
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '✕';
+            removeBtn.title = 'Remove friend';
+            removeBtn.style.cssText = 'background:none; border:none; color:#5a4a4a; cursor:pointer; font-size:11px; padding:0 2px;';
+            removeBtn.onmouseenter = () => { removeBtn.style.color = '#ff6060'; };
+            removeBtn.onmouseleave = () => { removeBtn.style.color = '#5a4a4a'; };
+            removeBtn.onclick = () => this.removeFriend(f.userId);
+            row.appendChild(nameSpan);
+            row.appendChild(removeBtn);
+            list.appendChild(row);
+        }
+    }
+
+    _showLobbyPlayerPopup(socketId, anchorRect) {
+        // Request profile data then position popup when it arrives
+        this._pendingPopupSocketId = socketId;
+        this.socket.emit('getLobbyPlayerProfile', socketId);
+        // Popup is actually shown when lobbyPlayerProfile event fires
+    }
+
+    closeLobbyPlayerPopup() {
+        const popup = document.getElementById('lobbyPlayerPopup');
+        if (popup) popup.style.display = 'none';
+        this._pendingPopupSocketId = null;
+    }
+
+    _renderLobbyPlayerPopup(data) {
+        const popup = document.getElementById('lobbyPlayerPopup');
+        if (!popup || !data) return;
+        const nameEl = document.getElementById('popupPlayerName');
+        const statsEl = document.getElementById('popupPlayerStats');
+        const actionsEl = document.getElementById('popupPlayerActions');
+        if (nameEl) nameEl.textContent = data.accountUsername || data.name;
+        if (statsEl) {
+            if (data.stats) {
+                statsEl.innerHTML =
+                    `Matches: <b style="color:#c8e8ff">${data.stats.matchesPlayed}</b><br>` +
+                    `Best Wave: <b style="color:#c8e8ff">${data.stats.bestWave}</b><br>` +
+                    `Total Score: <b style="color:#c8e8ff">${data.stats.totalScore.toLocaleString()}</b>`;
+            } else {
+                statsEl.innerHTML = '<span style="color:#4a6a7a;">Guest — no account stats</span>';
+            }
+        }
+        if (actionsEl) {
+            actionsEl.innerHTML = '';
+            if (!data.isSelf && data.accountUserId) {
+                if (data.isFriend) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.textContent = '✓ Friends';
+                    removeBtn.style.cssText = 'background:rgba(0,200,120,0.1); border:1px solid rgba(0,200,120,0.3); color:#00c878; padding:7px 14px; border-radius:7px; cursor:pointer; font-size:12px;';
+                    removeBtn.onclick = () => { this.removeFriend(data.accountUserId); this.closeLobbyPlayerPopup(); };
+                    actionsEl.appendChild(removeBtn);
+                } else {
+                    const addBtn = document.createElement('button');
+                    addBtn.textContent = '+ Add Friend';
+                    addBtn.style.cssText = 'background:rgba(100,180,255,0.1); border:1px solid rgba(100,180,255,0.3); color:#7eb8ff; padding:7px 14px; border-radius:7px; cursor:pointer; font-size:12px;';
+                    addBtn.onclick = () => { this.addLobbyFriend(data.socketId); this.closeLobbyPlayerPopup(); };
+                    actionsEl.appendChild(addBtn);
+                }
+            } else if (!data.accountUserId && !data.isSelf) {
+                const note = document.createElement('span');
+                note.style.cssText = 'font-size:11px; color:#4a6a7a;';
+                note.textContent = 'Guest — cannot add as friend';
+                actionsEl.appendChild(note);
+            }
+        }
+        // Position popup to the left of the lobby panel
+        popup.style.display = 'block';
+        popup.style.right = '310px';
+        popup.style.top = '120px';
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { GAME_CONFIG } = require('./config');
 const { normalizeRoomMode } = require('./assets');
-const { getPublicProfile, getAuthenticatedUserFromSocket, saveUserStore } = require('./auth');
+const { getPublicProfile, getAuthenticatedUserFromSocket, saveUserStore, getUserById, addFriendToUser, removeFriendFromUser } = require('./auth');
 const { getLeaderboard, addToLeaderboard } = require('./leaderboard');
 const { getClientIp } = require('./utils');
 const { GameRoom } = require('./entities/GameRoom');
@@ -17,6 +17,16 @@ const roomsModule = require('./rooms');
 
 const LOBBY_ROOM_ID = 'persistent-lobby';
 const LOBBY_ROOM_NAME = '🏠 Social Lobby';
+
+function buildFriendList(user, io) {
+    if (!Array.isArray(user.friends)) return [];
+    // Build a set of logged-in userIds from connected sockets
+    const onlineUserIds = new Set();
+    for (const s of io.sockets.sockets.values()) {
+        if (s.data?.authUserId) onlineUserIds.add(s.data.authUserId);
+    }
+    return user.friends.map(f => ({ ...f, isOnline: onlineUserIds.has(f.userId) }));
+}
 
 function ensureLobbyRoom() {
     if (!gameRooms.has(LOBBY_ROOM_ID)) {
@@ -372,6 +382,64 @@ function registerSocketHandlers(io) {
         socket.on('getLobbyInfo', () => {
             const lobby = gameRooms.get(LOBBY_ROOM_ID);
             socket.emit('lobbyInfo', { playerCount: lobby ? lobby.players.size : 0 });
+        });
+
+        // ── Friend list & player profile ──────────────────────────────────────
+
+        // Get profile/stats of a specific player currently in the lobby
+        socket.on('getLobbyPlayerProfile', (targetSocketId) => {
+            const lobby = gameRooms.get(LOBBY_ROOM_ID);
+            if (!lobby || !lobby.players.has(socket.id)) return;
+            const target = lobby.players.get(targetSocketId);
+            if (!target) { socket.emit('lobbyPlayerProfile', null); return; }
+
+            // Get their account stats if they have an account
+            const authUser = getAuthenticatedUserFromSocket(socket); // requester
+            const myFriends = authUser?.friends || [];
+            const isFriend = myFriends.some(f => f.userId === target.accountUserId);
+
+            socket.emit('lobbyPlayerProfile', {
+                socketId: targetSocketId,
+                name: target.name,
+                accountUserId: target.accountUserId || null,
+                accountUsername: target.accountUsername || null,
+                skinTheme: target.skinTheme,
+                currentWeapon: target.currentWeapon,
+                stats: target.accountUserId ? (() => {
+                    const u = getUserById(target.accountUserId);
+                    return u ? u.progression.stats : null;
+                })() : null,
+                isFriend,
+                isSelf: targetSocketId === socket.id
+            });
+        });
+
+        // Add a friend (target must be in the lobby and have an account)
+        socket.on('addLobbyFriend', (targetSocketId) => {
+            const requester = getAuthenticatedUserFromSocket(socket);
+            if (!requester) { socket.emit('friendActionResult', { ok: false, reason: 'You must be logged in to add friends.' }); return; }
+            const lobby = gameRooms.get(LOBBY_ROOM_ID);
+            const target = lobby?.players.get(targetSocketId);
+            if (!target?.accountUserId) { socket.emit('friendActionResult', { ok: false, reason: 'That player does not have an account.' }); return; }
+            if (target.accountUserId === requester.id) { socket.emit('friendActionResult', { ok: false, reason: 'You cannot add yourself.' }); return; }
+            const added = addFriendToUser(requester, target.accountUserId, target.accountUsername || target.name);
+            socket.emit('friendActionResult', { ok: true, added, userId: target.accountUserId, username: target.accountUsername || target.name });
+            socket.emit('friendList', buildFriendList(requester, io));
+        });
+
+        // Remove a friend by their userId
+        socket.on('removeFriend', (targetUserId) => {
+            const requester = getAuthenticatedUserFromSocket(socket);
+            if (!requester) return;
+            removeFriendFromUser(requester, targetUserId);
+            socket.emit('friendList', buildFriendList(requester, io));
+        });
+
+        // Get current friend list
+        socket.on('getFriends', () => {
+            const user = getAuthenticatedUserFromSocket(socket);
+            if (!user) { socket.emit('friendList', []); return; }
+            socket.emit('friendList', buildFriendList(user, io));
         });
 
         socket.on('disconnect', () => {

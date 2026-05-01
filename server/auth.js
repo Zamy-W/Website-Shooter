@@ -97,7 +97,10 @@ function normalizeUserRecord(user) {
                 totalScore: Number.isFinite(user?.progression?.stats?.totalScore) ? Math.max(0, user.progression.stats.totalScore) : 0,
                 totalMetaCurrencyEarned: Number.isFinite(user?.progression?.stats?.totalMetaCurrencyEarned) ? Math.max(0, user.progression.stats.totalMetaCurrencyEarned) : 0
             }
-        }
+        },
+        friends: Array.isArray(user?.friends)
+            ? user.friends.filter(f => f?.userId && typeof f.username === 'string').map(f => ({ userId: f.userId, username: f.username }))
+            : [],
     };
 }
 
@@ -233,7 +236,8 @@ function getPublicProfile(user) {
         unlockedWeapons, selectedWeapon: unlockedWeapons.includes(user.progression.selectedWeapon) ? user.progression.selectedWeapon : defaultWeaponId,
         stats: { matchesPlayed: user.progression.stats.matchesPlayed, bestWave: user.progression.stats.bestWave, totalScore: user.progression.stats.totalScore, totalMetaCurrencyEarned: user.progression.stats.totalMetaCurrencyEarned },
         availableSkins: skins,
-        availableWeapons: weapons.filter((w) => w.playable)
+        availableWeapons: weapons.filter((w) => w.playable),
+        friends: Array.isArray(user.friends) ? user.friends : []
     };
 }
 
@@ -421,6 +425,25 @@ function deleteUserAccountFromAdmin(userId, disconnectSocketsByUserId) {
     return { ok: true };
 }
 
+// ── Friend management ─────────────────────────────────────────────────────────
+
+function addFriendToUser(user, targetUserId, targetUsername) {
+    if (!user || !targetUserId || user.id === targetUserId) return false;
+    if (!Array.isArray(user.friends)) user.friends = [];
+    if (user.friends.some(f => f.userId === targetUserId)) return false; // already friends
+    user.friends.push({ userId: targetUserId, username: targetUsername });
+    saveUserStore();
+    return true;
+}
+
+function removeFriendFromUser(user, targetUserId) {
+    if (!user || !Array.isArray(user.friends)) return false;
+    const before = user.friends.length;
+    user.friends = user.friends.filter(f => f.userId !== targetUserId);
+    if (user.friends.length !== before) { saveUserStore(); return true; }
+    return false;
+}
+
 // ── Socket auth helpers ───────────────────────────────────────────────────────
 
 function getSocketAuthToken(socket) {
@@ -475,5 +498,7 @@ module.exports = {
     updateUserAccountFromAdmin,
     deleteUserAccountFromAdmin,
     getSocketAuthToken,
-    getAuthenticatedUserFromSocket
+    getAuthenticatedUserFromSocket,
+    addFriendToUser,
+    removeFriendFromUser
 };
