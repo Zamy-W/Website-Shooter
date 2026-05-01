@@ -1028,39 +1028,51 @@
         }
 
         .mobile-action-stack {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
             align-items: center;
             pointer-events: auto;
         }
 
         .mobile-action-button {
-            min-width: 88px;
-            min-height: 46px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 14px;
-            background: linear-gradient(145deg, rgba(20, 30, 42, 0.96), rgba(11, 18, 28, 0.96));
-            color: #f3fbff;
+            width: 54px;
+            height: 54px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            background: rgba(10, 20, 34, 0.38);
+            color: rgba(220, 240, 255, 0.82);
             font-family: inherit;
-            font-size: 13px;
-            font-weight: bold;
-            letter-spacing: 0.04em;
-            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.25);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1.2;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
             touch-action: manipulation;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1px;
+            padding: 0;
+            cursor: pointer;
+            transition: background 0.1s, transform 0.08s;
         }
 
-        #mobileReloadButton {
-            background: linear-gradient(145deg, rgba(20, 30, 42, 0.54), rgba(11, 18, 28, 0.42));
-            border-color: rgba(255, 255, 255, 0.08);
-            color: rgba(243, 251, 255, 0.82);
-            backdrop-filter: blur(6px);
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        .mobile-action-button:active {
+            background: rgba(100, 180, 255, 0.28);
+            transform: scale(0.92);
         }
 
         .mobile-action-button:disabled {
-            opacity: 0.45;
+            opacity: 0.3;
         }
+
+        .mob-btn-icon { font-size: 18px; line-height: 1; }
+        .mob-btn-label { font-size: 9px; color: rgba(180,220,255,0.7); }
 
         body.mobile-layout {
             justify-content: flex-start;
@@ -2291,10 +2303,22 @@
             <div class="mobile-pad-label">Move</div>
         </div>
         <div class="mobile-action-stack">
-            <button type="button" id="mobileReloadButton" class="mobile-action-button">Reload</button>
-            <button type="button" id="mobileGrenadeButton" class="mobile-action-button">Hold Grenade</button>
-            <button type="button" id="mobileWeaponButton" class="mobile-action-button">Swap</button>
-            <button type="button" id="mobileRespawnButton" class="mobile-action-button">Respawn</button>
+            <button type="button" id="mobileReloadButton" class="mobile-action-button">
+                <span class="mob-btn-icon">⟳</span>
+                <span class="mob-btn-label">Reload</span>
+            </button>
+            <button type="button" id="mobileGrenadeButton" class="mobile-action-button">
+                <span class="mob-btn-icon">💣</span>
+                <span class="mob-btn-label">Grenade</span>
+            </button>
+            <button type="button" id="mobileWeaponButton" class="mobile-action-button">
+                <span class="mob-btn-icon">⇄</span>
+                <span class="mob-btn-label">Swap</span>
+            </button>
+            <button type="button" id="mobileRespawnButton" class="mobile-action-button">
+                <span class="mob-btn-icon">↩</span>
+                <span class="mob-btn-label">Respawn</span>
+            </button>
         </div>
         <div id="aimPad" class="mobile-pad aim-pad" aria-label="Aim and fire joystick">
             <div id="aimPadKnob" class="mobile-pad-knob"></div>
