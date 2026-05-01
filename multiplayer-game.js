@@ -6164,39 +6164,76 @@ class MultiplayerGame {
 
             this.ctx.save();
 
-            // Drop shadow
-            this.ctx.fillStyle = wallShadow;
+            const { x, y, width, height } = obstacle;
+            // Extrusion depth — how "tall" the wall looks
+            const h3d = obstacle.style === 'crate' ? 10 : 16;
+            const ex = h3d * 0.55;  // east offset
+            const ey = h3d * 0.88;  // south offset
+
+            // ── 1. Far ground shadow ───────────────────────────────────────
+            this.ctx.globalAlpha = 0.22;
+            this.ctx.fillStyle = '#000';
             this.ctx.beginPath();
-            this.ctx.roundRect(obstacle.x + 8, obstacle.y + 10, obstacle.width, obstacle.height, radius);
+            this.ctx.roundRect(x + ex + 4, y + ey + 4, width, height, radius);
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1;
+
+            // ── 2. South face (bottom extrusion) ──────────────────────────
+            const southColor = this.ctx.createLinearGradient(x, y + height, x, y + height + ey);
+            southColor.addColorStop(0, this.withAlpha(wallBase, 0.95));
+            southColor.addColorStop(1, 'rgba(0,0,0,0.65)');
+            this.ctx.fillStyle = southColor;
+            this.ctx.beginPath();
+            this.ctx.moveTo(x + radius * 0.4,           y + height);
+            this.ctx.lineTo(x + width - radius * 0.4,   y + height);
+            this.ctx.lineTo(x + width + ex - radius * 0.2, y + height + ey);
+            this.ctx.lineTo(x + ex + radius * 0.2,         y + height + ey);
+            this.ctx.closePath();
             this.ctx.fill();
 
-            // Base shell
+            // ── 3. East face (right extrusion) ────────────────────────────
+            const eastColor = this.ctx.createLinearGradient(x + width, y, x + width + ex, y);
+            eastColor.addColorStop(0, this.withAlpha(wallBase, 0.75));
+            eastColor.addColorStop(1, 'rgba(0,0,0,0.55)');
+            this.ctx.fillStyle = eastColor;
+            this.ctx.beginPath();
+            this.ctx.moveTo(x + width, y + radius * 0.4);
+            this.ctx.lineTo(x + width + ex, y + radius * 0.2);
+            this.ctx.lineTo(x + width + ex, y + height + ey - radius * 0.2);
+            this.ctx.lineTo(x + width, y + height - radius * 0.4);
+            this.ctx.closePath();
+            this.ctx.fill();
+
+            // ── 4. Top face with north-light gradient ─────────────────────
             this.ctx.fillStyle = wallBase;
             this.ctx.beginPath();
-            this.ctx.roundRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height, radius);
+            this.ctx.roundRect(x, y, width, height, radius);
             this.ctx.fill();
 
-            // Upper face
-            const faceGradient = this.ctx.createLinearGradient(obstacle.x, obstacle.y, obstacle.x, obstacle.y + obstacle.height);
+            const faceGradient = this.ctx.createLinearGradient(x, y, x + width * 0.5, y + height);
             faceGradient.addColorStop(0, wallTop);
-            faceGradient.addColorStop(1, wallBase);
+            faceGradient.addColorStop(0.6, wallBase);
+            faceGradient.addColorStop(1, this.withAlpha(wallBase, 0.88));
             this.ctx.fillStyle = faceGradient;
             this.ctx.beginPath();
-            this.ctx.roundRect(obstacle.x + 4, obstacle.y + 4, obstacle.width - 8, obstacle.height - 8, Math.max(6, radius - 4));
+            this.ctx.roundRect(x + 4, y + 4, width - 8, height - 8, Math.max(6, radius - 4));
             this.ctx.fill();
 
-            // Trim
+            // ── 5. Trim edge ──────────────────────────────────────────────
             this.ctx.strokeStyle = wallTrim;
-            this.ctx.lineWidth = obstacle.style === 'crate' ? 2 : 3;
+            this.ctx.lineWidth = obstacle.style === 'crate' ? 1.5 : 2.5;
             this.ctx.beginPath();
-            this.ctx.roundRect(obstacle.x + 6, obstacle.y + 6, obstacle.width - 12, obstacle.height - 12, Math.max(6, radius - 6));
+            this.ctx.roundRect(x + 6, y + 6, width - 12, height - 12, Math.max(6, radius - 6));
             this.ctx.stroke();
 
-            this.ctx.globalAlpha = 0.22;
+            // ── 6. NW specular highlight (light from top-left) ───────────
+            this.ctx.globalAlpha = 0.28;
             this.ctx.fillStyle = '#ffffff';
             this.ctx.beginPath();
-            this.ctx.roundRect(obstacle.x + 12, obstacle.y + 12, Math.max(18, obstacle.width * 0.32), 10, 5);
+            this.ctx.roundRect(x + 10, y + 10, Math.max(16, width * 0.28), 8, 4);
             this.ctx.fill();
+            // Left edge highlight
+            this.ctx.fillRect(x + 10, y + 10, 4, Math.max(10, height * 0.3));
             this.ctx.globalAlpha = 1;
 
             if (obstacle.style === 'hub') {
@@ -6282,12 +6319,15 @@ class MultiplayerGame {
             this.ctx.restore();
         }
 
-        // Drop shadow
+        // Directional drop shadow (light from top-left → shadow falls bottom-right)
         this.ctx.save();
-        this.ctx.globalAlpha = 0.35;
-        this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        this.ctx.globalAlpha = 0.38;
+        const shadowGrad = this.ctx.createRadialGradient(player.x + 8, player.y + 16, 0, player.x + 8, player.y + 16, 18);
+        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.7)');
+        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        this.ctx.fillStyle = shadowGrad;
         this.ctx.beginPath();
-        this.ctx.ellipse(player.x, player.y + 14, 13, 5, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(player.x + 8, player.y + 16, 16, 6, 0, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.restore();
 
@@ -6671,12 +6711,17 @@ class MultiplayerGame {
         this.spriteRenderer.setState(enemy.id, animState);
         this.spriteRenderer.setDirection(enemy.id, enemy.angle > Math.PI/2 && enemy.angle < 3*Math.PI/2 ? -1 : 1);
         
-        // Drop shadow
+        // Directional drop shadow (offset bottom-right, light from top-left)
         this.ctx.save();
-        this.ctx.globalAlpha = 0.3;
-        this.ctx.fillStyle = 'rgba(0,0,0,0.9)';
+        this.ctx.globalAlpha = 0.32;
+        const esx = enemy.x + renderSize * 0.22;
+        const esy = enemy.y + renderSize * 0.44;
+        const eShadow = this.ctx.createRadialGradient(esx, esy, 0, esx, esy, renderSize * 0.42);
+        eShadow.addColorStop(0, 'rgba(0,0,0,0.75)');
+        eShadow.addColorStop(1, 'rgba(0,0,0,0)');
+        this.ctx.fillStyle = eShadow;
         this.ctx.beginPath();
-        this.ctx.ellipse(enemy.x, enemy.y + renderSize * 0.38, renderSize * 0.38, renderSize * 0.14, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(esx, esy, renderSize * 0.42, renderSize * 0.15, 0, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.restore();
 
