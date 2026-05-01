@@ -363,7 +363,10 @@ function registerSocketHandlers(io) {
 
         socket.on('lobbyUpdateAppearance', (skinTheme, weaponType) => {
             const lobby = gameRooms.get(LOBBY_ROOM_ID);
-            if (lobby) lobby.applyLobbyAppearance(socket.id, skinTheme, weaponType);
+            if (!lobby) return;
+            lobby.applyLobbyAppearance(socket.id, skinTheme, weaponType);
+            // Push updated state immediately so all players see the change right away
+            io.to(LOBBY_ROOM_ID).emit('gameState', lobby.getGameState());
         });
 
         socket.on('getLobbyInfo', () => {

@@ -1857,6 +1857,7 @@ class MultiplayerGame {
             this.selectedSkin = this.isSkinUnlocked(skinTheme) ? skinTheme : this.defaultSkinId;
             this.saveSelectedSkin(this.selectedSkin);
             this.updateSkinSelector();
+            if (this.isInSocialLobby) this.socket.emit('lobbyUpdateAppearance', this.selectedSkin, this.selectedLoadoutWeapon);
             return;
         }
 
@@ -1905,6 +1906,7 @@ class MultiplayerGame {
                 this.currentWeapon = this.selectedLoadoutWeapon;
             }
             this.updateWeaponSelector();
+            if (this.isInSocialLobby) this.socket.emit('lobbyUpdateAppearance', this.selectedSkin, this.selectedLoadoutWeapon);
             return;
         }
 
@@ -1915,6 +1917,7 @@ class MultiplayerGame {
             });
             this.setProfile(data.profile);
             this.setAuthStatus(`${this.weaponAssetCatalog[weaponType]?.label || 'Weapon'} selected.`, 'success');
+            if (this.isInSocialLobby) this.socket.emit('lobbyUpdateAppearance', this.selectedSkin, this.selectedLoadoutWeapon);
         } catch (error) {
             this.setAuthStatus(error.message, 'error');
         }
