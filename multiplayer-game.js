@@ -4586,20 +4586,53 @@ class MultiplayerGame {
         this.openLoadoutShop();
     }
 
-    _showSocialLobbyUI() {
-        // Show the fixed side panel
+    switchLobbyTab(tab) {
+        this._activelobbyTab = tab;
+        ['chat', 'players', 'friends'].forEach(t => {
+            const content = document.getElementById(`lobbyTabContent-${t}`);
+            const btn = document.getElementById(`lobbyTab-${t}`);
+            const active = t === tab;
+            if (content) content.style.display = active ? 'flex' : 'none';
+            if (btn) {
+                btn.style.background = active ? 'rgba(126,232,255,0.12)' : 'none';
+                btn.style.borderBottomColor = active ? '#7ee8ff' : 'transparent';
+                btn.style.color = active ? '#7ee8ff' : '#4a8a9a';
+            }
+        });
+        // Scroll chat to bottom when switching to it
+        if (tab === 'chat') {
+            const log = document.getElementById('lobbyChatLog');
+            if (log) log.scrollTop = log.scrollHeight;
+        }
+    }
+
+    toggleMobileLobbyPanel() {
         const panel = document.getElementById('socialLobbyPanel');
-        if (panel) { panel.style.display = 'flex'; }
+        if (!panel) return;
+        const isHidden = panel.style.display === 'none' || panel.style.display === '';
+        panel.style.display = isHidden ? 'flex' : 'none';
+        // Adjust canvas margin
+        const gc = document.getElementById('gameContainer');
+        if (gc) gc.style.marginRight = (isHidden && window.innerWidth > 500) ? '300px' : '';
+    }
+
+    _showSocialLobbyUI() {
+        const isMobile = window.innerWidth <= 600;
+        const panel = document.getElementById('socialLobbyPanel');
+        // On mobile: start hidden, show toggle button; on desktop: always show
+        if (panel) panel.style.display = isMobile ? 'none' : 'flex';
+        const toggle = document.getElementById('lobbyPanelToggle');
+        if (toggle) toggle.style.display = isMobile ? 'flex' : 'none';
         document.getElementById('socialLobbyEntry').style.display = 'none';
         const log = document.getElementById('lobbyChatLog');
         if (log) log.innerHTML = '';
-        // Shrink game canvas to leave room for the 300px side panel
+        // Shrink game canvas only on desktop
         const gc = document.getElementById('gameContainer');
-        if (gc) { gc.style.marginRight = '300px'; gc.style.display = 'block'; }
-        // Hide the lobby screen, show canvas
+        if (gc) { gc.style.marginRight = isMobile ? '' : '300px'; gc.style.display = 'block'; }
         const ls = document.getElementById('lobbyScreen');
         if (ls) ls.style.display = 'none';
         this.inGame = true;
+        this.switchLobbyTab('chat');
         this.applyResponsiveLayout();
         this.startMusic('lobby');
         this.refreshFriends();
@@ -4613,6 +4646,8 @@ class MultiplayerGame {
         if (fl) fl.innerHTML = '';
         const panel = document.getElementById('socialLobbyPanel');
         if (panel) panel.style.display = 'none';
+        const toggle = document.getElementById('lobbyPanelToggle');
+        if (toggle) toggle.style.display = 'none';
         const gc = document.getElementById('gameContainer');
         if (gc) { gc.style.marginRight = ''; gc.style.display = 'none'; }
         const ls = document.getElementById('lobbyScreen');
@@ -4667,7 +4702,7 @@ class MultiplayerGame {
     }
 
     refreshFriends() {
-        if (this.socket && this.isInSocialLobby) this.socket.emit('getFriends');
+        if (this.socket) this.socket.emit('getFriends');
     }
 
     renderLobbyPlayerList() {
@@ -4688,10 +4723,7 @@ class MultiplayerGame {
             btn.title = 'Click to view profile';
             btn.onmouseenter = () => { btn.style.background = 'rgba(100,180,220,0.08)'; };
             btn.onmouseleave = () => { btn.style.background = 'none'; };
-            btn.onclick = () => {
-                const rect = btn.getBoundingClientRect();
-                this._showLobbyPlayerPopup(id, rect);
-            };
+            btn.onclick = () => this._showLobbyPlayerPopup(id);
             list.appendChild(btn);
         }
     }
@@ -4745,16 +4777,29 @@ class MultiplayerGame {
         if (!isOpen && this.socket) this.socket.emit('getFriends');
     }
 
-    _showLobbyPlayerPopup(socketId, anchorRect) {
-        // Request profile data then position popup when it arrives
-        this._pendingPopupSocketId = socketId;
-        this.socket.emit('getLobbyPlayerProfile', socketId);
-        // Popup is actually shown when lobbyPlayerProfile event fires
+    _showLobbyPlayerPopup(socketId) {
+        // Show immediately with whatever client-side data we have
+        const localPlayer = this.players.get(socketId);
+        const isSelf = socketId === this.playerId;
+        const quickData = {
+            socketId,
+            name: localPlayer?.name || socketId,
+            skinTheme: localPlayer?.skinTheme,
+            isSelf,
+            stats: null,
+            isFriend: false,
+            accountUserId: null
+        };
+        this._renderLobbyPlayerPopup(quickData);
+        // Also ask server for account stats + friend status
+        if (this.socket) this.socket.emit('getLobbyPlayerProfile', socketId);
     }
 
     closeLobbyPlayerPopup() {
         const popup = document.getElementById('lobbyPlayerPopup');
         if (popup) popup.style.display = 'none';
+        const backdrop = document.getElementById('lobbyPlayerPopupBackdrop');
+        if (backdrop) backdrop.style.display = 'none';
         this._pendingPopupSocketId = null;
     }
 
@@ -4762,19 +4807,26 @@ class MultiplayerGame {
         const popup = document.getElementById('lobbyPlayerPopup');
         if (!popup || !data) return;
         const nameEl = document.getElementById('popupPlayerName');
+        const tagEl = document.getElementById('popupPlayerTag');
         const statsEl = document.getElementById('popupPlayerStats');
         const actionsEl = document.getElementById('popupPlayerActions');
+
         if (nameEl) nameEl.textContent = data.accountUsername || data.name;
+        if (tagEl) tagEl.textContent = data.isSelf ? '(You)' : (data.accountUserId ? '🔒 Account' : '👤 Guest');
+
         if (statsEl) {
             if (data.stats) {
                 statsEl.innerHTML =
-                    `Matches: <b style="color:#c8e8ff">${data.stats.matchesPlayed}</b><br>` +
-                    `Best Wave: <b style="color:#c8e8ff">${data.stats.bestWave}</b><br>` +
-                    `Total Score: <b style="color:#c8e8ff">${data.stats.totalScore.toLocaleString()}</b>`;
+                    `🎮 Matches: <b style="color:#c8e8ff;float:right">${data.stats.matchesPlayed}</b><br>` +
+                    `🌊 Best Wave: <b style="color:#7ee8ff;float:right">${data.stats.bestWave}</b><br>` +
+                    `⭐ Total Score: <b style="color:#ffd166;float:right">${data.stats.totalScore.toLocaleString()}</b>`;
+            } else if (data.accountUserId) {
+                statsEl.innerHTML = '<span style="color:#4a6a7a;">Loading stats…</span>';
             } else {
                 statsEl.innerHTML = '<span style="color:#4a6a7a;">Guest — no account stats</span>';
             }
         }
+
         if (actionsEl) {
             actionsEl.innerHTML = '';
             if (!data.isSelf && data.accountUserId) {
@@ -4798,10 +4850,10 @@ class MultiplayerGame {
                 actionsEl.appendChild(note);
             }
         }
-        // Position popup to the left of the lobby panel
+        // Show popup centered on screen with backdrop
         popup.style.display = 'block';
-        popup.style.right = '310px';
-        popup.style.top = '120px';
+        const backdrop = document.getElementById('lobbyPlayerPopupBackdrop');
+        if (backdrop) backdrop.style.display = 'block';
     }
 
     // ─────────────────────────────────────────────────────────────────────────
