@@ -20,12 +20,24 @@ const LOBBY_ROOM_NAME = '🏠 Social Lobby';
 
 function buildFriendList(user, io) {
     if (!Array.isArray(user.friends)) return [];
-    // Build a set of logged-in userIds from connected sockets
     const onlineUserIds = new Set();
     for (const s of io.sockets.sockets.values()) {
         if (s.data?.authUserId) onlineUserIds.add(s.data.authUserId);
     }
     return user.friends.map(f => ({ ...f, isOnline: onlineUserIds.has(f.userId) }));
+}
+
+// Push an updated friendList to every online socket that has userId in their friends list
+function pushFriendListToFriendsOf(userId, io) {
+    if (!userId) return;
+    for (const s of io.sockets.sockets.values()) {
+        if (!s.data?.authUserId) continue;
+        const u = getUserById(s.data.authUserId);
+        if (!u || !Array.isArray(u.friends)) continue;
+        if (u.friends.some(f => f.userId === userId)) {
+            s.emit('friendList', buildFriendList(u, io));
+        }
+    }
 }
 
 function ensureLobbyRoom() {
@@ -67,6 +79,13 @@ function registerSocketHandlers(io) {
             authenticated: Boolean(authUser),
             profile: authUser ? getPublicProfile(authUser) : null
         });
+
+        // Send friend list immediately on connect so the panel is populated right away
+        if (authUser) {
+            socket.emit('friendList', buildFriendList(authUser, io));
+            // Let this user's friends know they just came online
+            pushFriendListToFriendsOf(authUser.id, io);
+        }
 
         emitRoomList(socket);
 
@@ -444,6 +463,8 @@ function registerSocketHandlers(io) {
 
         socket.on('disconnect', () => {
             console.log(`Player disconnected: ${socket.id} (Remaining clients: ${io.engine.clientsCount - 1})`);
+            // Notify this user's friends that they went offline
+            if (socket.data?.authUserId) pushFriendListToFriendsOf(socket.data.authUserId, io);
 
             for (const room of gameRooms.values()) {
                 if (room.spectators.has(socket.id)) {

@@ -1564,6 +1564,17 @@ class MultiplayerGame {
         this.updateSkinSelector();
         this.rebuildWeaponSelector();
         this.updateWeaponSelector();
+
+        // Show/hide persistent friends panel toggle button
+        const toggleBtn = document.getElementById('friendsToggleBtn');
+        if (toggleBtn) toggleBtn.style.display = this.profile ? 'flex' : 'none';
+        // If logging out, close and clear the panel
+        if (!this.profile) {
+            const panel = document.getElementById('friendsPanel');
+            if (panel) panel.style.display = 'none';
+            const pl = document.getElementById('friendsPanelList');
+            if (pl) pl.innerHTML = '<div style="padding:14px; font-size:12px; color:#4a6a7a; text-align:center;">Sign in to see your friends here.</div>';
+        }
     }
 
     syncLobbyIdentityState() {
@@ -4686,16 +4697,29 @@ class MultiplayerGame {
     }
 
     renderFriendList(friends) {
-        const list = document.getElementById('lobbyFriendList');
+        this._renderFriendListInto('lobbyFriendList', friends, { compact: true });
+        this._renderFriendListInto('friendsPanelList', friends, { compact: false });
+        // Update persistent panel badge
+        const online = (friends || []).filter(f => f.isOnline).length;
+        const badge = document.getElementById('friendsOnlineBadge');
+        if (badge) badge.textContent = online;
+        const count = document.getElementById('friendsPanelCount');
+        if (count) count.textContent = `${online} online`;
+    }
+
+    _renderFriendListInto(containerId, friends, { compact = false } = {}) {
+        const list = document.getElementById(containerId);
         if (!list) return;
         if (!friends || friends.length === 0) {
-            list.innerHTML = '<div style="padding:8px; font-size:12px; color:#4a6a7a; text-align:center;">No friends yet</div>';
+            list.innerHTML = `<div style="padding:${compact ? '8px' : '14px'}; font-size:12px; color:#4a6a7a; text-align:center;">No friends yet</div>`;
             return;
         }
         list.innerHTML = '';
-        for (const f of friends) {
+        // Online friends first
+        const sorted = [...friends].sort((a, b) => (b.isOnline ? 1 : 0) - (a.isOnline ? 1 : 0));
+        for (const f of sorted) {
             const row = document.createElement('div');
-            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:5px 10px; font-size:12px;';
+            row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:${compact ? '5px 10px' : '7px 14px'}; font-size:12px;`;
             const dot = f.isOnline ? '🟢' : '⚫';
             const nameSpan = document.createElement('span');
             nameSpan.style.color = f.isOnline ? '#7ee8ff' : '#5a7a8a';
@@ -4711,6 +4735,14 @@ class MultiplayerGame {
             row.appendChild(removeBtn);
             list.appendChild(row);
         }
+    }
+
+    toggleFriendsPanel() {
+        const panel = document.getElementById('friendsPanel');
+        if (!panel) return;
+        const isOpen = panel.style.display !== 'none';
+        panel.style.display = isOpen ? 'none' : 'block';
+        if (!isOpen && this.socket) this.socket.emit('getFriends');
     }
 
     _showLobbyPlayerPopup(socketId, anchorRect) {
