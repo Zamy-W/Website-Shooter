@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { GAME_CONFIG } = require('./config');
 const { normalizeRoomMode } = require('./assets');
 const { v4: uuidv4Request } = require('uuid');
-const { getPublicProfile, getAuthenticatedUserFromSocket, saveUserStore, getUserById, addFriendToUser, removeFriendFromUser, sendFriendRequestToUser, acceptFriendRequest, declineFriendRequest } = require('./auth');
+const { getPublicProfile, getAuthenticatedUserFromSocket, saveUserStore, getUserById, addFriendToUser, removeFriendFromUser, sendFriendRequestToUser, acceptFriendRequest, declineFriendRequest, storePendingPm, drainPendingPms } = require('./auth');
 const { getLeaderboard, addToLeaderboard } = require('./leaderboard');
 const { getClientIp } = require('./utils');
 const { GameRoom } = require('./entities/GameRoom');
@@ -81,10 +81,15 @@ function registerSocketHandlers(io) {
             profile: authUser ? getPublicProfile(authUser) : null
         });
 
-        // Send friend list + pending requests immediately on connect
+        // Send friend list + pending requests + queued PMs immediately on connect
         if (authUser) {
             socket.emit('friendList', buildFriendList(authUser, io));
             socket.emit('friendRequests', authUser.friendRequests || []);
+            // Drain any PMs that arrived while the user was offline
+            const pendingPms = drainPendingPms(authUser);
+            for (const pm of pendingPms) {
+                socket.emit('pmReceived', { ...pm, queued: true });
+            }
             // Let this user's friends know they just came online
             pushFriendListToFriendsOf(authUser.id, io);
         }
@@ -617,8 +622,12 @@ function registerSocketHandlers(io) {
                     delivered = true;
                 }
             }
-            // Echo confirmation back to sender
-            socket.emit('pmSent', { ...payload, delivered });
+            // Queue for offline delivery if recipient has no active sockets
+            if (!delivered) {
+                storePendingPm(targetUser, payload);
+            }
+            // Echo confirmation back to sender (queued = stored for offline delivery)
+            socket.emit('pmSent', { ...payload, delivered, queued: !delivered });
         });
 
         socket.on('disconnect', () => {

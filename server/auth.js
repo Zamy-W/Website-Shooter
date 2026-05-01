@@ -104,6 +104,9 @@ function normalizeUserRecord(user) {
         friendRequests: Array.isArray(user?.friendRequests)
             ? user.friendRequests.filter(r => r?.requestId && r?.fromUserId && typeof r.fromUsername === 'string').map(r => ({ requestId: r.requestId, fromUserId: r.fromUserId, fromUsername: r.fromUsername, sentAt: r.sentAt || new Date().toISOString() }))
             : [],
+        pendingPms: Array.isArray(user?.pendingPms)
+            ? user.pendingPms.filter(m => m?.fromUserId && typeof m.text === 'string' && m.ts).slice(-100)
+            : [],
     };
 }
 
@@ -481,6 +484,25 @@ function declineFriendRequest(user, requestId) {
     return false;
 }
 
+// ── Offline PM queue ─────────────────────────────────────────────────────────
+
+// Store a PM for a user who is currently offline (capped at 100 per user)
+function storePendingPm(targetUser, pm) {
+    if (!Array.isArray(targetUser.pendingPms)) targetUser.pendingPms = [];
+    if (targetUser.pendingPms.length >= 100) targetUser.pendingPms.shift(); // drop oldest if full
+    targetUser.pendingPms.push(pm);
+    saveUserStore();
+}
+
+// Retrieve and clear all queued PMs for a user (called on connect)
+function drainPendingPms(user) {
+    if (!Array.isArray(user.pendingPms) || user.pendingPms.length === 0) return [];
+    const messages = [...user.pendingPms];
+    user.pendingPms = [];
+    saveUserStore();
+    return messages;
+}
+
 // ── Socket auth helpers ───────────────────────────────────────────────────────
 
 function getSocketAuthToken(socket) {
@@ -540,5 +562,7 @@ module.exports = {
     removeFriendFromUser,
     sendFriendRequestToUser,
     acceptFriendRequest,
-    declineFriendRequest
+    declineFriendRequest,
+    storePendingPm,
+    drainPendingPms
 };

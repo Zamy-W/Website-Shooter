@@ -2840,9 +2840,13 @@ class MultiplayerGame {
             if (!isPanelFocused) {
                 conv.unread++;
                 this._updatePmBadge();
-                this._showNotification(`💬 ${pm.fromUsername}: ${pm.text.length > 60 ? pm.text.slice(0, 60) + '…' : pm.text}`, 'info', () => {
-                    this.openPmWith(pm.fromUserId, pm.fromUsername);
-                });
+                // Queued messages arrive in a batch on login — show one toast per sender not per message
+                if (!pm.queued || !conv._shownQueuedToast) {
+                    conv._shownQueuedToast = pm.queued;
+                    const preview = pm.text.length > 60 ? pm.text.slice(0, 60) + '…' : pm.text;
+                    const label = pm.queued ? `💬 ${pm.fromUsername} (offline): ${preview}` : `💬 ${pm.fromUsername}: ${preview}`;
+                    this._showNotification(label, 'info', () => { this.openPmWith(pm.fromUserId, pm.fromUsername); });
+                }
             } else {
                 this._renderPmMessages();
             }
@@ -2852,9 +2856,12 @@ class MultiplayerGame {
             if (!this._pmConversations) return;
             const conv = this._pmConversations.get(pm.toUserId);
             if (conv) {
-                // Message was already added optimistically — just mark delivered
+                // Message was already added optimistically — update delivery status
                 const last = conv.messages[conv.messages.length - 1];
-                if (last && last.isSelf && last.text === pm.text) last.delivered = pm.delivered;
+                if (last && last.isSelf && last.text === pm.text) {
+                    last.delivered = pm.delivered;
+                    last.queued = pm.queued; // true = stored for when they come online
+                }
                 this._renderPmMessages();
             }
         });
@@ -4840,6 +4847,24 @@ class MultiplayerGame {
         if (panel) panel.style.display = 'none';
     }
 
+    deletePmConversation(userId) {
+        this._pmConversations.delete(userId);
+        this._updatePmBadge();
+        if (this._activePmUserId === userId) {
+            // Switch to another conversation or close the panel
+            const nextId = this._pmConversations.keys().next().value;
+            if (nextId) {
+                this._activePmUserId = nextId;
+                this._renderPmPanel();
+            } else {
+                this._activePmUserId = null;
+                this.closePmPanel();
+            }
+        } else if (this._pmPanelOpen) {
+            this._renderPmTabs();
+        }
+    }
+
     togglePmPanel() {
         if (this._pmPanelOpen) {
             this.closePmPanel();
@@ -4914,16 +4939,30 @@ class MultiplayerGame {
         for (const [uid, conv] of this._pmConversations) {
             const tab = document.createElement('div');
             const isActive = uid === this._activePmUserId;
-            tab.style.cssText = `display:flex; align-items:center; gap:5px; padding:6px 12px; font-size:11px; cursor:pointer; white-space:nowrap; border-bottom:2px solid ${isActive ? '#7ee8ff' : 'transparent'}; color:${isActive ? '#7ee8ff' : '#4a7a8a'}; flex-shrink:0; transition:color 0.15s;`;
+            tab.style.cssText = `display:flex; align-items:center; gap:4px; padding:6px 10px 6px 12px; font-size:11px; cursor:pointer; white-space:nowrap; border-bottom:2px solid ${isActive ? '#7ee8ff' : 'transparent'}; color:${isActive ? '#7ee8ff' : '#4a7a8a'}; flex-shrink:0; transition:color 0.15s;`;
+
             const nameSpan = document.createElement('span');
             nameSpan.textContent = conv.username;
+            nameSpan.onclick = () => { this._activePmUserId = uid; conv.unread = 0; this._updatePmBadge(); this._renderPmPanel(); };
             tab.appendChild(nameSpan);
+
             if (conv.unread > 0 && !isActive) {
                 const badge = document.createElement('span');
-                badge.style.cssText = 'background:#ff4455; color:#fff; border-radius:999px; min-width:14px; height:14px; font-size:9px; display:inline-flex; align-items:center; justify-content:center; padding:0 3px;';
+                badge.style.cssText = 'background:#ff4455; color:#fff; border-radius:999px; min-width:14px; height:14px; font-size:9px; display:inline-flex; align-items:center; justify-content:center; padding:0 3px; pointer-events:none;';
                 badge.textContent = conv.unread;
                 tab.appendChild(badge);
             }
+
+            // ✕ close/delete button on each tab
+            const closeBtn = document.createElement('span');
+            closeBtn.textContent = '×';
+            closeBtn.title = 'Delete conversation';
+            closeBtn.style.cssText = `font-size:14px; line-height:1; color:${isActive ? '#5a8a9a' : '#2a4a5a'}; padding:0 1px; border-radius:3px; flex-shrink:0;`;
+            closeBtn.onmouseenter = () => { closeBtn.style.color = '#ff6060'; };
+            closeBtn.onmouseleave = () => { closeBtn.style.color = isActive ? '#5a8a9a' : '#2a4a5a'; };
+            closeBtn.onclick = (e) => { e.stopPropagation(); this.deletePmConversation(uid); };
+            tab.appendChild(closeBtn);
+
             tab.onclick = () => { this._activePmUserId = uid; conv.unread = 0; this._updatePmBadge(); this._renderPmPanel(); };
             tabsEl.appendChild(tab);
         }
@@ -4942,7 +4981,9 @@ class MultiplayerGame {
             return;
         }
         let lastDate = null;
-        for (const msg of conv.messages) {
+        const msgs = conv.messages;
+        for (let i = 0; i < msgs.length; i++) {
+            const msg = msgs[i];
             // Date separator
             const msgDate = new Date(msg.ts).toLocaleDateString();
             if (msgDate !== lastDate) {
@@ -4954,12 +4995,20 @@ class MultiplayerGame {
             }
             const isSelf = msg.isSelf || msg.fromUserId === this.profile?.id;
             const bubble = document.createElement('div');
-            bubble.style.cssText = `max-width:82%; padding:8px 12px; border-radius:${isSelf ? '14px 14px 4px 14px' : '14px 14px 14px 4px'}; font-size:12.5px; line-height:1.45; word-break:break-word; align-self:${isSelf ? 'flex-end' : 'flex-start'}; background:${isSelf ? 'rgba(100,180,255,0.14)' : 'rgba(255,255,255,0.06)'}; border:1px solid ${isSelf ? 'rgba(100,180,255,0.28)' : 'rgba(255,255,255,0.09)'}; color:${isSelf ? '#b8deff' : '#cde'}; position:relative;`;
+            bubble.style.cssText = `max-width:82%; padding:8px 12px; border-radius:${isSelf ? '14px 14px 4px 14px' : '14px 14px 14px 4px'}; font-size:12.5px; line-height:1.45; word-break:break-word; align-self:${isSelf ? 'flex-end' : 'flex-start'}; background:${isSelf ? 'rgba(100,180,255,0.14)' : 'rgba(255,255,255,0.06)'}; border:1px solid ${isSelf ? 'rgba(100,180,255,0.28)' : 'rgba(255,255,255,0.09)'}; color:${isSelf ? '#b8deff' : '#cde'};`;
             bubble.textContent = msg.text;
             // Timestamp tooltip on hover
             const time = new Date(msg.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             bubble.title = `${isSelf ? 'You' : msg.fromUsername} · ${time}`;
             msgsEl.appendChild(bubble);
+
+            // Show queued status note after the last self-sent queued message
+            if (isSelf && msg.queued && i === msgs.length - 1) {
+                const note = document.createElement('div');
+                note.style.cssText = 'align-self:flex-end; font-size:10px; color:#3a6a7a; margin-top:-2px;';
+                note.textContent = '📬 Queued — will deliver when they come online';
+                msgsEl.appendChild(note);
+            }
         }
         msgsEl.scrollTop = msgsEl.scrollHeight;
     }
