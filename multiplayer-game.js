@@ -5179,13 +5179,14 @@ class MultiplayerGame {
         }
         const colors = { success: '#00c878', warn: '#ffaa44', info: '#7ee8ff', error: '#ff6060' };
         const toast = document.createElement('div');
-        toast.style.cssText = `background:rgba(8,18,28,0.95); border:1px solid ${colors[tone] || colors.info}44; border-left:3px solid ${colors[tone] || colors.info}; color:#cde; padding:10px 14px; border-radius:8px; font-size:13px; pointer-events:all; cursor:${onClick ? 'pointer' : 'default'}; box-shadow:0 4px 20px rgba(0,0,0,0.5); backdrop-filter:blur(8px);`;
+        toast.className = 'game-notification';
+        toast.style.cssText = `background:rgba(8,18,28,0.96); border:1px solid ${colors[tone] || colors.info}55; border-left:3px solid ${colors[tone] || colors.info}; color:#cde; padding:11px 14px; border-radius:10px; font-size:13px; line-height:1.4; pointer-events:all; cursor:${onClick ? 'pointer' : 'default'}; box-shadow:0 6px 24px rgba(0,0,0,0.55); backdrop-filter:blur(10px); transition:opacity 0.3s;`;
         toast.textContent = message;
-        if (onClick) toast.onclick = onClick;
+        if (onClick) toast.onclick = () => { onClick(); toast.remove(); };
         container.appendChild(toast);
-        // Close on click
-        toast.addEventListener('click', () => toast.remove(), { once: true });
-        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
+        // Swipe right or click to dismiss
+        toast.addEventListener('click', () => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, { once: true });
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300); }, 5000);
     }
 
     _showGameInviteNotification(invite) {

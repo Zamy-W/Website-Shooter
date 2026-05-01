@@ -57,7 +57,7 @@
             top: 10px;
             left: 10px;
             z-index: 10;
-            font-size: 18px;
+            font-size: clamp(13px, 1.8vw, 18px);
             pointer-events: none;
             user-select: none;
         }
@@ -72,12 +72,15 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9);
-            padding: 30px;
-            border: 2px solid #ff0000;
+            background: linear-gradient(145deg, rgba(20,0,0,0.97), rgba(10,0,0,0.97));
+            padding: clamp(20px, 5vw, 36px);
+            border: 1px solid rgba(255,60,60,0.5);
+            border-radius: 16px;
             text-align: center;
             display: none;
             z-index: 20;
+            box-shadow: 0 0 60px rgba(255,0,0,0.2), 0 16px 40px rgba(0,0,0,0.6);
+            min-width: min(300px, 90vw);
         }
 
         #deathScreen {
@@ -85,17 +88,20 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(20, 0, 0, 0.95);
-            padding: 30px;
-            border: 2px solid #ff6600;
+            background: linear-gradient(145deg, rgba(20,6,0,0.97), rgba(12,4,0,0.97));
+            padding: clamp(18px, 5vw, 30px);
+            border: 1px solid rgba(255,120,30,0.45);
+            border-radius: 16px;
             text-align: center;
             z-index: 20;
-            min-width: 300px;
+            min-width: min(300px, 90vw);
+            box-shadow: 0 0 40px rgba(255,80,0,0.15), 0 16px 40px rgba(0,0,0,0.6);
         }
 
         #deathScreen h2 {
-            color: #ff6600;
+            color: #ff8040;
             margin-top: 0;
+            font-size: clamp(16px, 4vw, 22px);
         }
 
         .respawn-overlay {
@@ -971,7 +977,7 @@
 
         .mobile-pad {
             position: relative;
-            width: min(36vw, 180px);
+            width: clamp(140px, 38vw, 210px);
             aspect-ratio: 1 / 1;
             border-radius: 50%;
             border: 1px solid rgba(142, 255, 209, 0.28);
@@ -1036,8 +1042,8 @@
         }
 
         .mobile-action-button {
-            width: 54px;
-            height: 54px;
+            width: clamp(52px, 13vw, 64px);
+            height: clamp(52px, 13vw, 64px);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 50%;
             background: rgba(10, 20, 34, 0.38);
@@ -1071,7 +1077,7 @@
             opacity: 0.3;
         }
 
-        .mob-btn-icon { font-size: 18px; line-height: 1; }
+        .mob-btn-icon { font-size: clamp(16px, 4.5vw, 20px); line-height: 1; }
         .mob-btn-label { font-size: 9px; color: rgba(180,220,255,0.7); }
 
         body.mobile-layout {
@@ -1174,18 +1180,22 @@
             padding: 12px 14px;
             margin: 5px;
             border-radius: 10px;
+            font-size: 16px; /* prevent iOS auto-zoom on focus */
         }
 
         #lobbyScreen button {
             background: linear-gradient(135deg, #74ffcb, #00c777);
             border: none;
             color: #000;
-            padding: 10px 16px;
+            padding: 12px 18px;
             margin: 5px;
             border-radius: 10px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 14px;
+            min-height: 44px;
             transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+            touch-action: manipulation;
         }
 
         #lobbyScreen button:hover {
@@ -1205,14 +1215,19 @@
         .room-item {
             background: linear-gradient(145deg, rgba(20, 28, 36, 0.96), rgba(12, 18, 24, 0.96));
             border: 1px solid rgba(144, 235, 209, 0.12);
-            padding: 15px;
+            padding: clamp(12px, 3vw, 18px);
             margin: 8px 0;
             border-radius: 14px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            min-height: 60px;
+            min-height: 64px;
             gap: 16px;
+            transition: border-color 0.18s, box-shadow 0.18s;
+        }
+        .room-item:hover {
+            border-color: rgba(144, 235, 209, 0.28);
+            box-shadow: 0 4px 20px rgba(0,255,170,0.08);
         }
 
         .room-info {
@@ -1713,50 +1728,148 @@
             color: #061120 !important;
         }
 
+        /* ── 820 px: tablet / small-desktop collapse ──────────────────────── */
+        /* ── Global touch/interaction polish ──────────────────────────────── */
+
+        /* Remove tap highlight on mobile */
+        button, a, [role="button"] {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        /* All text inputs: 16px minimum so iOS doesn't zoom */
+        input[type="text"], input[type="password"], input[type="email"],
+        input[type="number"], textarea, select {
+            font-size: max(16px, 1em);
+        }
+
+        /* Smooth scrolling everywhere */
+        * { scroll-behavior: smooth; }
+
+        /* Scrollbar styling for webkit */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb { background: rgba(100,180,220,0.3); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(100,180,220,0.5); }
+
+        /* Pulse animation for unread badges */
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+        #friendRequestBadge, #pmUnreadBadge {
+            animation: badgePulse 2s ease-in-out infinite;
+        }
+
+        /* Notification toast enter animation */
+        @keyframes slideInRight {
+            from { transform: translateX(120%); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+        .game-notification { animation: slideInRight 0.25s ease-out forwards; }
+
+        /* ── 820 px: tablet / small-desktop collapse ──────────────────────── */
         @media (max-width: 820px) {
-            .lobby-grid {
-                grid-template-columns: 1fr;
-            }
+            h1 { font-size: clamp(18px, 5vw, 28px); }
+
+            .lobby-grid { grid-template-columns: 1fr; }
 
             .auth-grid,
             .auth-stats,
             .loadout-shop-meta,
             .loadout-shop-grid,
             .armory-meta-grid,
-            .armory-layout {
-                grid-template-columns: 1fr;
-            }
+            .armory-layout { grid-template-columns: 1fr; }
 
-            .staging-overview {
-                grid-template-columns: 1fr;
-            }
+            .staging-overview { grid-template-columns: 1fr; }
 
             #lobbyScreen {
-                width: min(960px, calc(100vw - 20px));
-                padding: 16px;
+                width: min(960px, calc(100vw - 16px));
+                padding: clamp(12px, 4vw, 20px);
             }
 
             #armoryScreen {
-                width: min(1100px, calc(100vw - 20px));
-                padding: 18px;
-            }
-
-            .mobile-pad {
-                width: min(34vw, 160px);
+                width: min(1100px, calc(100vw - 16px));
+                padding: clamp(12px, 4vw, 18px);
             }
 
             .room-mode-row {
                 flex-direction: column;
                 align-items: stretch;
             }
+            .room-mode-label { min-width: 0; }
+            .pvp-room-options { grid-template-columns: 1fr; }
 
-            .room-mode-label {
-                min-width: 0;
+            /* shop modal: less side padding, full-width */
+            .shop-modal { padding: clamp(14px, 4vw, 22px); }
+        }
+
+        /* ── 580 px: phone landscape / small tablet ────────────────────── */
+        @media (max-width: 580px) {
+            .room-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .room-item > button,
+            .room-item > .room-action { width: 100%; }
+
+            .room-badge-stack { flex-wrap: wrap; }
+
+            /* Wider shop grid cards on phones */
+            .shop-card-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+        }
+
+        /* ── 480 px: typical phone portrait ────────────────────────────── */
+        @media (max-width: 480px) {
+            h1 { font-size: 16px; margin: 8px 0; }
+
+            #lobbyScreen { padding: 12px 10px; }
+            #lobbyScreen input { padding: 11px 12px; }
+            #lobbyScreen button { padding: 11px 14px; font-size: 13px; }
+
+            /* Stack social lobby panel full-width */
+            #socialLobbyPanel { width: 100vw !important; }
+
+            /* Friends + PM buttons: move upward so they don't clash with nav */
+            #friendsToggleBtn, #pmToggleBtn { bottom: 14px; }
+
+            /* Joystick pads slightly smaller on narrow phones */
+            .mobile-pad { width: clamp(120px, 36vw, 170px); }
+            .mobile-action-button {
+                width: clamp(48px, 12vw, 58px);
+                height: clamp(48px, 12vw, 58px);
             }
 
-            .pvp-room-options {
-                grid-template-columns: 1fr;
+            /* Shop grid: single column on very small screens */
+            .shop-card-grid { grid-template-columns: 1fr !important; gap: 6px !important; }
+
+            /* Death / game-over panels: less padding */
+            #deathScreen { padding: clamp(14px, 5vw, 24px); min-width: min(280px, 90vw); }
+            #gameOver { padding: clamp(14px, 5vw, 24px); }
+
+            /* Staging panel */
+            #waitingRoom { padding: 12px; }
+
+            /* Auth panel inputs: larger touch area */
+            .auth-panel input, .auth-panel button { min-height: 46px; }
+
+            /* PM panel flush to edges */
+            #pmPanel { right: 8px !important; width: calc(100vw - 16px) !important; }
+        }
+
+        /* ── 360 px: small Android phones ──────────────────────────────── */
+        @media (max-width: 360px) {
+            h1 { font-size: 14px; }
+            #lobbyScreen { padding: 10px 8px; }
+            #lobbyScreen input, #lobbyScreen button { font-size: 13px; margin: 3px; }
+            .mobile-pad { width: clamp(110px, 34vw, 150px); }
+            .mobile-action-button {
+                width: clamp(44px, 11.5vw, 54px);
+                height: clamp(44px, 11.5vw, 54px);
             }
+            .mob-btn-icon { font-size: 15px; }
+            .mob-btn-label { display: none; } /* hide text labels on very small screens */
         }
     </style>
 </head>
