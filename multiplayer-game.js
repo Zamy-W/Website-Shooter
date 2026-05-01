@@ -293,6 +293,11 @@ class MultiplayerGame {
         this._pmPanelOpen = false;
         this._cachedFriendList = [];
         this._cachedFriendRequests = [];
+
+        // Visual effects state
+        this._hitFlashTime = 0;       // timestamp of last hit taken
+        this._hitFlashDuration = 280; // ms the flash lasts
+        this._lastKnownHealth = 100;  // to detect damage
         this.wave = 1;
         this.waveInfo = {
             bossWave: false,
@@ -4471,7 +4476,13 @@ class MultiplayerGame {
                 this.spriteRenderer.setState(playerData.id, 'hit');
                 this.spriteRenderer.addEffect(playerData.id, 'flash', 1.0);
                 this.spriteRenderer.addEffect(playerData.id, 'shake', 0.8);
+                // Trigger screen-space hit flash for local player
+                if (playerData.id === this.playerId) {
+                    this._hitFlashTime = Date.now();
+                    this._lastKnownHealth = playerData.health;
+                }
             }
+            if (playerData.id === this.playerId) this._lastKnownHealth = playerData.health;
 
             if (previousPlayer && previousPlayer.currentWeapon && playerData.currentWeapon && previousPlayer.currentWeapon !== playerData.currentWeapon) {
                 const preferredDirection = playerData.id === this.playerId
@@ -5898,9 +5909,73 @@ class MultiplayerGame {
         
         // Reset transform
         this.ctx.restore();
-        
+
+        // Screen-space post-process effects (no camera transform)
+        this.drawAmbientLight(cameraX, cameraY);
+        this.drawDamageOverlay();
+
         // Draw UI elements in screen space (not affected by camera)
         this.drawUI(cameraX, cameraY);
+    }
+
+    // Radial darkness that fades from transparent at the player to dark at edges — "torch" / spotlight feel
+    drawAmbientLight(cameraX, cameraY) {
+        const player = this.players.get(this.playerId);
+        if (!player || !player.alive) return;
+
+        // Player centre in screen space
+        const px = player.x - cameraX;
+        const py = player.y - cameraY;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        // Outer vignette — always present, softens edges
+        const outerR = Math.max(w, h) * 0.85;
+        const outerGrad = this.ctx.createRadialGradient(w / 2, h / 2, outerR * 0.3, w / 2, h / 2, outerR);
+        outerGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        outerGrad.addColorStop(1, 'rgba(0,0,0,0.55)');
+        this.ctx.fillStyle = outerGrad;
+        this.ctx.fillRect(0, 0, w, h);
+
+        // Spotlight centred on player — dims everything except a circle around them
+        const spotR = Math.min(w, h) * 0.72;
+        const spotGrad = this.ctx.createRadialGradient(px, py, spotR * 0.15, px, py, spotR);
+        spotGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        spotGrad.addColorStop(0.55, 'rgba(0,0,0,0)');
+        spotGrad.addColorStop(1, 'rgba(0,0,0,0.42)');
+        this.ctx.fillStyle = spotGrad;
+        this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Persistent low-health red vignette + brief white hit flash
+    drawDamageOverlay() {
+        const player = this.players.get(this.playerId);
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        // Persistent red vignette — scales with missing health
+        if (player && player.alive) {
+            const hp = player.health / (player.maxHealth || 100);
+            if (hp < 0.6) {
+                const intensity = (0.6 - hp) / 0.6; // 0 at 60%, 1 at 0%
+                const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 350); // gentle pulse
+                const alpha = intensity * (0.18 + 0.14 * pulse);
+                const vGrad = this.ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.22, w / 2, h / 2, Math.max(w, h) * 0.75);
+                vGrad.addColorStop(0, 'rgba(200,0,0,0)');
+                vGrad.addColorStop(1, `rgba(200,0,0,${alpha.toFixed(3)})`);
+                this.ctx.fillStyle = vGrad;
+                this.ctx.fillRect(0, 0, w, h);
+            }
+        }
+
+        // Hit flash — brief white/red flare that fades out
+        const elapsed = Date.now() - this._hitFlashTime;
+        if (elapsed < this._hitFlashDuration) {
+            const t = elapsed / this._hitFlashDuration;
+            const flashAlpha = (1 - t) * (1 - t) * 0.45; // ease-out
+            this.ctx.fillStyle = `rgba(255,80,80,${flashAlpha.toFixed(3)})`;
+            this.ctx.fillRect(0, 0, w, h);
+        }
     }
 
     drawGrid(cameraX = 0, cameraY = 0) {
@@ -5964,16 +6039,38 @@ class MultiplayerGame {
 
         for (let x = startX; x <= endX; x += tileSize) {
             for (let y = startY; y <= endY; y += tileSize) {
-                const alternating = ((Math.floor(x / tileSize) + Math.floor(y / tileSize)) % 2) === 0;
-                this.ctx.fillStyle = alternating ? 'rgba(255,255,255,0.028)' : 'rgba(0,0,0,0.06)';
+                const tx = Math.floor(x / tileSize);
+                const ty = Math.floor(y / tileSize);
+                const alternating = ((tx + ty) % 2) === 0;
+
+                // Subtle checkerboard tone
+                this.ctx.fillStyle = alternating ? 'rgba(255,255,255,0.022)' : 'rgba(0,0,0,0.05)';
                 this.ctx.fillRect(x, y, tileSize, tileSize);
 
-                this.ctx.fillStyle = palette.floorGlow || 'rgba(54, 179, 126, 0.045)';
-                this.ctx.fillRect(x + 10, y + 10, tileSize - 20, 6);
+                // Thin border groove between tiles
+                this.ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+                this.ctx.lineWidth = 0.5;
+                this.ctx.strokeRect(x + 0.5, y + 0.5, tileSize - 1, tileSize - 1);
 
-                if (((x / tileSize) + (y / tileSize)) % 3 === 0) {
-                    this.ctx.fillStyle = this.resolveArenaColor('decal', 'rgba(255,255,255,0.06)');
-                    this.ctx.fillRect(x + tileSize - 34, y + tileSize - 34, 16, 16);
+                // Inner inset highlight (top & left edges)
+                this.ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + 3, y + tileSize - 3);
+                this.ctx.lineTo(x + 3, y + 3);
+                this.ctx.lineTo(x + tileSize - 3, y + 3);
+                this.ctx.stroke();
+
+                // Arena-coloured accent stripe
+                this.ctx.fillStyle = palette.floorGlow || 'rgba(54,179,126,0.04)';
+                this.ctx.fillRect(x + 8, y + 8, tileSize - 16, 3);
+
+                // Corner dot on every third tile
+                if ((tx + ty) % 3 === 0) {
+                    this.ctx.fillStyle = this.resolveArenaColor('decal', 'rgba(255,255,255,0.07)');
+                    this.ctx.beginPath();
+                    this.ctx.arc(x + tileSize - 12, y + tileSize - 12, 4, 0, Math.PI * 2);
+                    this.ctx.fill();
                 }
             }
         }
@@ -6184,6 +6281,15 @@ class MultiplayerGame {
             this.ctx.stroke();
             this.ctx.restore();
         }
+
+        // Drop shadow
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.35;
+        this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        this.ctx.beginPath();
+        this.ctx.ellipse(player.x, player.y + 14, 13, 5, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.restore();
 
         // Render modern sprite
         this.spriteRenderer.renderEntity(this.ctx, player.id, player.x, player.y, 32, 32);
@@ -6565,6 +6671,15 @@ class MultiplayerGame {
         this.spriteRenderer.setState(enemy.id, animState);
         this.spriteRenderer.setDirection(enemy.id, enemy.angle > Math.PI/2 && enemy.angle < 3*Math.PI/2 ? -1 : 1);
         
+        // Drop shadow
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.fillStyle = 'rgba(0,0,0,0.9)';
+        this.ctx.beginPath();
+        this.ctx.ellipse(enemy.x, enemy.y + renderSize * 0.38, renderSize * 0.38, renderSize * 0.14, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.restore();
+
         // Render modern enemy sprite
         this.spriteRenderer.renderEntity(this.ctx, enemy.id, enemy.x, enemy.y, renderSize, renderSize);
 
