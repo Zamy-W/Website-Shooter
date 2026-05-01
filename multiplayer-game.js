@@ -262,6 +262,9 @@ class MultiplayerGame {
             if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
         };
 
+        // AudioManager — procedural SFX engine
+        this.audioManager = (typeof AudioManager !== 'undefined') ? new AudioManager() : null;
+
         // Modern Systems
         this.assetManager = new AssetManager();
         this.particleSystem = new ParticleSystem();
@@ -2525,6 +2528,8 @@ class MultiplayerGame {
             this.applyConfirmedPlayerState(result.player);
         }
 
+        this.audioManager?.play('upgrade_buy');
+
         const label = this.shopConfig[result.upgradeType]?.label || 'Upgrade';
         const nextLevel = result.player?.upgrades?.[result.upgradeType] ?? '?';
         const money = result.player?.money ?? '?';
@@ -2819,6 +2824,7 @@ class MultiplayerGame {
                 const panel = document.getElementById('friendsPanel');
                 if (panel) panel.style.display = 'block';
             });
+            this.audioManager?.play('friend_ping');
         });
 
         this.socket.on('friendRequestAccepted', (data) => {
@@ -2852,6 +2858,8 @@ class MultiplayerGame {
                     const label = pm.queued ? `💬 ${pm.fromUsername} (offline): ${preview}` : `💬 ${pm.fromUsername}: ${preview}`;
                     this._showNotification(label, 'info', () => { this.openPmWith(pm.fromUserId, pm.fromUsername); });
                 }
+                // Sound only for live (non-queued) messages to avoid batch-login noise
+                if (!pm.queued) this.audioManager?.play('pm_receive');
             } else {
                 this._renderPmMessages();
             }
@@ -2884,6 +2892,7 @@ class MultiplayerGame {
                 ...(waveData || {})
             };
             this.showWaveNotification(waveData);
+            this.audioManager?.play(waveData.bossWave ? 'boss_warning' : 'wave_start');
         });
 
         this.socket.on('gameEnded', (endData) => {
@@ -2917,6 +2926,7 @@ class MultiplayerGame {
                 endsAt: shopData.endsAt,
                 durationMs: shopData.durationMs
             };
+            this.audioManager?.play('shop_open');
             this.showShop();
         });
 
@@ -2979,6 +2989,8 @@ class MultiplayerGame {
             if (this.isEditableElement(e.target)) {
                 return;
             }
+            // Unlock AudioManager on first keypress (browser autoplay policy)
+            if (!this.audioManager?._initialized) this.audioManager?._init();
 
             this.keys[e.code] = true;
             
@@ -3049,6 +3061,7 @@ class MultiplayerGame {
 
         this.canvas.addEventListener('mousedown', (e) => {
             this._initAudioCtx(); // unlock AudioContext on first interaction
+            this.audioManager?._init();   // also unlock AudioManager context
             if (this.shopState.active) {
                 this.mouse.pressed = false;
                 e.preventDefault();
@@ -3577,6 +3590,7 @@ class MultiplayerGame {
             durationMs: reloadDuration
         };
         this.spriteRenderer.setState(player.id, 'reload');
+        this.audioManager?.play('reload');
         this.updateUI();
 
         if (!autoTriggered) {
@@ -3756,6 +3770,7 @@ class MultiplayerGame {
                 this.spriteRenderer.setState(myPlayer.id, 'shoot');
                 this.cameraSystem.startScreenShake(6, 180);
                 this.particleSystem.emit(myPlayer.x, myPlayer.y, 'smokeTrail', myPlayer.angle || 0, 0.8);
+                this.audioManager?.play('grenade_throw');
             }
 
             this.updateUI(result.player || null);
@@ -3772,6 +3787,7 @@ class MultiplayerGame {
         this.particleSystem.emit(explosionX, explosionY, 'explosion', 0, 1.45);
         this.particleSystem.emit(explosionX, explosionY, 'hitSpark', 0, 1.8);
         this.particleSystem.emit(explosionX, explosionY, 'smokeTrail', Math.PI / 2, 1.2);
+        this.audioManager?.play('explosion');
 
         const localPlayer = this.players.get(this.playerId);
         if (localPlayer) {
@@ -3880,8 +3896,8 @@ class MultiplayerGame {
         // Update crosshair spread
         this.updateCrosshairSpread(Math.max(weapon.energyBeam ? 10 : 0, weapon.spread * 50));
         
-        // Play sound effect (placeholder - you can implement actual sound)
-        this.playWeaponSound(weapon.sound);
+        // Play weapon sound via AudioManager
+        if (this.audioManager) this.audioManager.play(AudioManager.weaponSound(weapon.id || this.currentWeapon));
 
         console.log(`Fired ${weapon.name}! Pellets: ${weapon.pelletCount}, Damage: ${weapon.damage}`);
     }
@@ -4243,6 +4259,15 @@ class MultiplayerGame {
         this._musicMuted = !this._musicMuted;
         try { localStorage.setItem('musicMuted', String(this._musicMuted)); } catch(e) {}
         this._applyMusicVolume();
+        // Also mute/unmute AudioManager SFX
+        if (this.audioManager) {
+            if (this._musicMuted) {
+                this._amPreMuteVol = this.audioManager.masterVolume;
+                this.audioManager.setMasterVolume(0);
+            } else {
+                this.audioManager.setMasterVolume(this._amPreMuteVol ?? 0.72);
+            }
+        }
         const btn = document.getElementById('muteBtn');
         if (btn) btn.textContent = this._musicMuted ? '🔇' : '🔊';
     }
@@ -4480,6 +4505,7 @@ class MultiplayerGame {
                 if (playerData.id === this.playerId) {
                     this._hitFlashTime = Date.now();
                     this._lastKnownHealth = playerData.health;
+                    this.audioManager?.play('hit_player');
                 }
             }
             if (playerData.id === this.playerId) this._lastKnownHealth = playerData.health;
@@ -4507,9 +4533,15 @@ class MultiplayerGame {
         
         // Update enemies - clean up removed enemies first
         const currentEnemyIds = new Set(gameState.enemies.map(e => e.id));
+        let _enemyDieCount = 0;
         for (let [enemyId] of this.enemies) {
             if (!currentEnemyIds.has(enemyId)) {
                 this.spriteRenderer.removeEntity(enemyId);
+                // Play enemy death sound (cap at 3 simultaneous to avoid cacophony)
+                if (_enemyDieCount < 3) {
+                    this.audioManager?.play('enemy_die');
+                    _enemyDieCount++;
+                }
             }
         }
         
@@ -4531,7 +4563,17 @@ class MultiplayerGame {
             });
         }
         
-        // Update power-ups
+        // Update power-ups — detect pickups near the local player
+        if (gameState.powerUps && this.powerUps.size > 0) {
+            const newPuIds = new Set(gameState.powerUps.map(p => p.id));
+            const localPlayer = this.players.get(this.playerId);
+            for (const [pId, pu] of this.powerUps) {
+                if (!newPuIds.has(pId) && localPlayer) {
+                    const dist = Math.hypot(localPlayer.x - pu.x, localPlayer.y - pu.y);
+                    if (dist < 90) this.audioManager?.play('pickup_powerup');
+                }
+            }
+        }
         this.powerUps.clear();
         if (gameState.powerUps) {
             gameState.powerUps.forEach(powerUpData => {
@@ -4587,6 +4629,7 @@ class MultiplayerGame {
                 }
                 this.particleSystem.emit(currentPlayer.x, currentPlayer.y, 'explosion', 0, 2.0);
                 this.cameraSystem.startScreenShake(25, 800); // Stronger, longer shake for death
+                this.audioManager?.play('player_die');
             }
         }
         
@@ -7720,6 +7763,8 @@ class MultiplayerGame {
     showPersonalGameOver(endData) {
         this.stopMusic();
         this.hideDeathScreen();
+        // Fanfare for a good run (score > 0 means they played meaningfully)
+        if ((endData.finalScore || 0) > 0) this.audioManager?.play('game_win');
         
         // Show final results
         document.getElementById('finalScore').textContent = endData.finalScore;
