@@ -2754,6 +2754,14 @@ class MultiplayerGame {
             if (data) this._renderLobbyPlayerPopup(data);
         });
 
+        this.socket.on('friendProfile', (data) => {
+            if (data) this._renderLobbyPlayerPopup(data);
+            else {
+                const statsEl = document.getElementById('popupPlayerStats');
+                if (statsEl) statsEl.innerHTML = '<span style="color:#4a6a7a;">Player not found.</span>';
+            }
+        });
+
         this.socket.on('friendList', (friends) => {
             this._cachedFriendList = friends || [];
             this.renderFriendList(this._cachedFriendList);
@@ -4673,7 +4681,23 @@ class MultiplayerGame {
             line.style.fontStyle = 'italic';
             line.textContent = msg.text;
         } else {
-            line.innerHTML = `<span style="color:#7ee8ff;font-weight:600;">${this._escapeChatHtml(msg.playerName)}</span><span style="color:#556;"> › </span><span style="color:#cde;">${this._escapeChatHtml(msg.text)}</span>`;
+            // Make the player name clickable so you can tap to view profile
+            const nameSpan = document.createElement('span');
+            nameSpan.style.cssText = 'color:#7ee8ff;font-weight:600;cursor:pointer;text-decoration:underline dotted rgba(126,232,255,0.4);';
+            nameSpan.textContent = this._escapeChatHtml(msg.playerName);
+            nameSpan.title = 'View profile';
+            if (msg.playerId) {
+                nameSpan.onclick = () => this._showLobbyPlayerPopup(msg.playerId);
+            }
+            const sep = document.createElement('span');
+            sep.style.color = '#445566';
+            sep.textContent = ' › ';
+            const text = document.createElement('span');
+            text.style.color = '#cde';
+            text.textContent = this._escapeChatHtml(msg.text);
+            line.appendChild(nameSpan);
+            line.appendChild(sep);
+            line.appendChild(text);
         }
         log.appendChild(line);
         log.scrollTop = log.scrollHeight;
@@ -4751,15 +4775,17 @@ class MultiplayerGame {
         const sorted = [...friends].sort((a, b) => (b.isOnline ? 1 : 0) - (a.isOnline ? 1 : 0));
         for (const f of sorted) {
             const row = document.createElement('div');
-            row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:${compact ? '5px 10px' : '7px 14px'}; font-size:12px;`;
+            row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:${compact ? '5px 10px' : '7px 14px'}; font-size:12px; gap:4px;`;
             const dot = f.isOnline ? '🟢' : '⚫';
             const nameSpan = document.createElement('span');
-            nameSpan.style.color = f.isOnline ? '#7ee8ff' : '#5a7a8a';
+            nameSpan.style.cssText = `color:${f.isOnline ? '#7ee8ff' : '#5a7a8a'}; cursor:pointer; text-decoration:underline dotted rgba(126,232,255,0.35); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
             nameSpan.textContent = dot + ' ' + f.username;
+            nameSpan.title = 'View profile';
+            nameSpan.onclick = () => this._showFriendProfile(f.userId, f.username);
             const removeBtn = document.createElement('button');
             removeBtn.textContent = '✕';
             removeBtn.title = 'Remove friend';
-            removeBtn.style.cssText = 'background:none; border:none; color:#5a4a4a; cursor:pointer; font-size:11px; padding:0 2px;';
+            removeBtn.style.cssText = 'background:none; border:none; color:#5a4a4a; cursor:pointer; font-size:11px; padding:0 2px; flex-shrink:0;';
             removeBtn.onmouseenter = () => { removeBtn.style.color = '#ff6060'; };
             removeBtn.onmouseleave = () => { removeBtn.style.color = '#5a4a4a'; };
             removeBtn.onclick = () => this.removeFriend(f.userId);
@@ -4795,6 +4821,25 @@ class MultiplayerGame {
         if (this.socket) this.socket.emit('getLobbyPlayerProfile', socketId);
     }
 
+    // Show profile popup for a friend by their persistent userId (works offline)
+    _showFriendProfile(userId, username) {
+        if (!this.socket) return;
+        // Show a skeleton immediately
+        const quickData = {
+            socketId: null,
+            name: username || userId,
+            accountUserId: userId,
+            accountUsername: username,
+            skinTheme: null,
+            isSelf: false,
+            isFriend: true,
+            stats: null
+        };
+        this._renderLobbyPlayerPopup(quickData);
+        // Ask server for full stats
+        this.socket.emit('getFriendProfile', userId);
+    }
+
     closeLobbyPlayerPopup() {
         const popup = document.getElementById('lobbyPlayerPopup');
         if (popup) popup.style.display = 'none';
@@ -4812,7 +4857,13 @@ class MultiplayerGame {
         const actionsEl = document.getElementById('popupPlayerActions');
 
         if (nameEl) nameEl.textContent = data.accountUsername || data.name;
-        if (tagEl) tagEl.textContent = data.isSelf ? '(You)' : (data.accountUserId ? '🔒 Account' : '👤 Guest');
+        if (tagEl) {
+            if (data.isSelf) tagEl.textContent = '(You)';
+            else if (!data.accountUserId) tagEl.textContent = '👤 Guest';
+            else if (data.isOnline === true) tagEl.textContent = '🟢 Online';
+            else if (data.isOnline === false) tagEl.textContent = '⚫ Offline';
+            else tagEl.textContent = '🔒 Account';
+        }
 
         if (statsEl) {
             if (data.stats) {
@@ -4836,7 +4887,8 @@ class MultiplayerGame {
                     removeBtn.style.cssText = 'background:rgba(0,200,120,0.1); border:1px solid rgba(0,200,120,0.3); color:#00c878; padding:7px 14px; border-radius:7px; cursor:pointer; font-size:12px;';
                     removeBtn.onclick = () => { this.removeFriend(data.accountUserId); this.closeLobbyPlayerPopup(); };
                     actionsEl.appendChild(removeBtn);
-                } else {
+                } else if (data.socketId) {
+                    // Can only add friend when they have a lobby socket (are currently in the lobby)
                     const addBtn = document.createElement('button');
                     addBtn.textContent = '+ Add Friend';
                     addBtn.style.cssText = 'background:rgba(100,180,255,0.1); border:1px solid rgba(100,180,255,0.3); color:#7eb8ff; padding:7px 14px; border-radius:7px; cursor:pointer; font-size:12px;';

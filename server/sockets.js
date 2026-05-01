@@ -408,8 +408,8 @@ function registerSocketHandlers(io) {
         // Get profile/stats of a specific player currently in the lobby
         socket.on('getLobbyPlayerProfile', (targetSocketId) => {
             const lobby = gameRooms.get(LOBBY_ROOM_ID);
-            if (!lobby || !lobby.players.has(socket.id)) return;
-            const target = lobby.players.get(targetSocketId);
+            // Allow any connected socket to fetch a lobby player's profile (not just lobby members)
+            const target = lobby?.players.get(targetSocketId);
             if (!target) { socket.emit('lobbyPlayerProfile', null); return; }
 
             // Get their account stats if they have an account
@@ -430,6 +430,35 @@ function registerSocketHandlers(io) {
                 })() : null,
                 isFriend,
                 isSelf: targetSocketId === socket.id
+            });
+        });
+
+        // Get profile/stats of a friend by their persistent userId (works even when offline)
+        socket.on('getFriendProfile', (targetUserId) => {
+            if (!targetUserId) return;
+            const requester = getAuthenticatedUserFromSocket(socket);
+            const myFriends = requester?.friends || [];
+            const isFriend = myFriends.some(f => f.userId === targetUserId);
+            const targetUser = getUserById(targetUserId);
+            if (!targetUser) { socket.emit('friendProfile', null); return; }
+
+            // Check if they're currently online
+            let onlineSocketId = null;
+            for (const s of io.sockets.sockets.values()) {
+                if (s.data?.authUserId === targetUserId) { onlineSocketId = s.id; break; }
+            }
+
+            socket.emit('friendProfile', {
+                socketId: onlineSocketId,
+                name: targetUser.username,
+                accountUserId: targetUser.id,
+                accountUsername: targetUser.username,
+                skinTheme: null,
+                currentWeapon: null,
+                stats: targetUser.progression?.stats || null,
+                isFriend,
+                isSelf: targetUser.id === requester?.id,
+                isOnline: Boolean(onlineSocketId)
             });
         });
 
