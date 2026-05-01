@@ -3,7 +3,8 @@
 const { v4: uuidv4 } = require('uuid');
 const { GAME_CONFIG } = require('./config');
 const { normalizeRoomMode } = require('./assets');
-const { getPublicProfile, getAuthenticatedUserFromSocket, saveUserStore, getUserById, addFriendToUser, removeFriendFromUser } = require('./auth');
+const { v4: uuidv4Request } = require('uuid');
+const { getPublicProfile, getAuthenticatedUserFromSocket, saveUserStore, getUserById, addFriendToUser, removeFriendFromUser, sendFriendRequestToUser, acceptFriendRequest, declineFriendRequest } = require('./auth');
 const { getLeaderboard, addToLeaderboard } = require('./leaderboard');
 const { getClientIp } = require('./utils');
 const { GameRoom } = require('./entities/GameRoom');
@@ -80,9 +81,10 @@ function registerSocketHandlers(io) {
             profile: authUser ? getPublicProfile(authUser) : null
         });
 
-        // Send friend list immediately on connect so the panel is populated right away
+        // Send friend list + pending requests immediately on connect
         if (authUser) {
             socket.emit('friendList', buildFriendList(authUser, io));
+            socket.emit('friendRequests', authUser.friendRequests || []);
             // Let this user's friends know they just came online
             pushFriendListToFriendsOf(authUser.id, io);
         }
@@ -290,6 +292,12 @@ function registerSocketHandlers(io) {
         // ── Social Lobby ──────────────────────────────────────────────────────────
 
         socket.on('joinLobby', (playerName, skinTheme, selectedWeapon) => {
+            // Re-verify auth in case the user logged in after the socket was first established
+            const freshAuth = getAuthenticatedUserFromSocket(socket);
+            if (freshAuth) {
+                socket.data.authUserId = freshAuth.id;
+                socket.data.authUsername = freshAuth.username;
+            }
             const lobby = ensureLobbyRoom();
             // Leave any active game room first
             for (const [rid, room] of gameRooms) {
@@ -462,17 +470,63 @@ function registerSocketHandlers(io) {
             });
         });
 
-        // Add a friend (target must be in the lobby and have an account)
-        socket.on('addLobbyFriend', (targetSocketId) => {
+        // Send a friend request (target must be in lobby and have an account)
+        socket.on('sendFriendRequest', (targetSocketId) => {
             const requester = getAuthenticatedUserFromSocket(socket);
-            if (!requester) { socket.emit('friendActionResult', { ok: false, reason: 'You must be logged in to add friends.' }); return; }
+            if (!requester) { socket.emit('friendRequestResult', { ok: false, reason: 'You must be logged in to add friends.' }); return; }
             const lobby = gameRooms.get(LOBBY_ROOM_ID);
             const target = lobby?.players.get(targetSocketId);
-            if (!target?.accountUserId) { socket.emit('friendActionResult', { ok: false, reason: 'That player does not have an account.' }); return; }
-            if (target.accountUserId === requester.id) { socket.emit('friendActionResult', { ok: false, reason: 'You cannot add yourself.' }); return; }
-            const added = addFriendToUser(requester, target.accountUserId, target.accountUsername || target.name);
-            socket.emit('friendActionResult', { ok: true, added, userId: target.accountUserId, username: target.accountUsername || target.name });
-            socket.emit('friendList', buildFriendList(requester, io));
+            if (!target?.accountUserId) { socket.emit('friendRequestResult', { ok: false, reason: 'That player does not have an account.' }); return; }
+            if (target.accountUserId === requester.id) { socket.emit('friendRequestResult', { ok: false, reason: 'You cannot add yourself.' }); return; }
+
+            // Check if already friends
+            if (Array.isArray(requester.friends) && requester.friends.some(f => f.userId === target.accountUserId)) {
+                socket.emit('friendRequestResult', { ok: false, reason: 'You are already friends!' }); return;
+            }
+
+            const targetUser = getUserById(target.accountUserId);
+            if (!targetUser) { socket.emit('friendRequestResult', { ok: false, reason: 'User not found.' }); return; }
+
+            const result = sendFriendRequestToUser(targetUser, requester.id, requester.username);
+            if (!result.ok) {
+                const msgs = { already_friends: 'Already friends!', already_sent: 'Friend request already sent!', self: 'Cannot add yourself.', invalid: 'Invalid request.' };
+                socket.emit('friendRequestResult', { ok: false, reason: msgs[result.reason] || result.reason }); return;
+            }
+            socket.emit('friendRequestResult', { ok: true, sent: true, username: targetUser.username });
+
+            // Notify target if online
+            const targetSocket = io.sockets.sockets.get(targetSocketId);
+            if (targetSocket) {
+                targetSocket.emit('friendRequestReceived', { requestId: result.requestId, fromUserId: requester.id, fromUsername: requester.username });
+            }
+        });
+
+        // Accept or decline a friend request
+        socket.on('respondFriendRequest', (requestId, accept) => {
+            const user = getAuthenticatedUserFromSocket(socket);
+            if (!user) return;
+            if (accept) {
+                const req = acceptFriendRequest(user, requestId);
+                if (req) {
+                    // Also add user to requester's friends list
+                    const requesterUser = getUserById(req.fromUserId);
+                    if (requesterUser) {
+                        addFriendToUser(requesterUser, user.id, user.username);
+                        // Notify requester if online
+                        for (const s of io.sockets.sockets.values()) {
+                            if (s.data?.authUserId === req.fromUserId) {
+                                s.emit('friendRequestAccepted', { byUserId: user.id, byUsername: user.username });
+                                s.emit('friendList', buildFriendList(requesterUser, io));
+                            }
+                        }
+                    }
+                    socket.emit('friendList', buildFriendList(user, io));
+                    socket.emit('friendRequests', user.friendRequests || []);
+                }
+            } else {
+                declineFriendRequest(user, requestId);
+                socket.emit('friendRequests', user.friendRequests || []);
+            }
         });
 
         // Remove a friend by their userId
@@ -483,11 +537,42 @@ function registerSocketHandlers(io) {
             socket.emit('friendList', buildFriendList(requester, io));
         });
 
-        // Get current friend list
+        // Get current friend list + pending requests
         socket.on('getFriends', () => {
             const user = getAuthenticatedUserFromSocket(socket);
             if (!user) { socket.emit('friendList', []); return; }
             socket.emit('friendList', buildFriendList(user, io));
+            socket.emit('friendRequests', user.friendRequests || []);
+        });
+
+        // Send a game room invite to a friend (by userId)
+        socket.on('sendGameInvite', (targetUserId) => {
+            const sender = getAuthenticatedUserFromSocket(socket);
+            if (!sender) return;
+
+            // Find sender's current room
+            let senderRoom = null;
+            for (const room of gameRooms.values()) {
+                if (room.players.has(socket.id)) { senderRoom = room; break; }
+            }
+            if (!senderRoom) { socket.emit('gameInviteResult', { ok: false, reason: 'You are not in a room.' }); return; }
+
+            const inviteId = uuidv4Request();
+            let sent = false;
+            for (const s of io.sockets.sockets.values()) {
+                if (s.data?.authUserId === targetUserId) {
+                    s.emit('gameInviteReceived', {
+                        inviteId,
+                        fromUserId: sender.id,
+                        fromUsername: sender.username,
+                        roomId: senderRoom.id,
+                        roomName: senderRoom.name,
+                        isLobby: senderRoom.isLobbyMode()
+                    });
+                    sent = true;
+                }
+            }
+            socket.emit('gameInviteResult', { ok: true, sent, offline: !sent });
         });
 
         socket.on('disconnect', () => {

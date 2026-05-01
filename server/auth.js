@@ -101,6 +101,9 @@ function normalizeUserRecord(user) {
         friends: Array.isArray(user?.friends)
             ? user.friends.filter(f => f?.userId && typeof f.username === 'string').map(f => ({ userId: f.userId, username: f.username }))
             : [],
+        friendRequests: Array.isArray(user?.friendRequests)
+            ? user.friendRequests.filter(r => r?.requestId && r?.fromUserId && typeof r.fromUsername === 'string').map(r => ({ requestId: r.requestId, fromUserId: r.fromUserId, fromUsername: r.fromUsername, sentAt: r.sentAt || new Date().toISOString() }))
+            : [],
     };
 }
 
@@ -444,6 +447,40 @@ function removeFriendFromUser(user, targetUserId) {
     return false;
 }
 
+// ── Friend requests ───────────────────────────────────────────────────────────
+
+function sendFriendRequestToUser(targetUser, fromUserId, fromUsername) {
+    if (!targetUser || !fromUserId) return { ok: false, reason: 'invalid' };
+    if (targetUser.id === fromUserId) return { ok: false, reason: 'self' };
+    if (!Array.isArray(targetUser.friends)) targetUser.friends = [];
+    if (!Array.isArray(targetUser.friendRequests)) targetUser.friendRequests = [];
+    if (targetUser.friends.some(f => f.userId === fromUserId)) return { ok: false, reason: 'already_friends' };
+    if (targetUser.friendRequests.some(r => r.fromUserId === fromUserId)) return { ok: false, reason: 'already_sent' };
+    const { v4: uuidv4 } = require('uuid');
+    const requestId = uuidv4();
+    targetUser.friendRequests.push({ requestId, fromUserId, fromUsername, sentAt: new Date().toISOString() });
+    saveUserStore();
+    return { ok: true, requestId };
+}
+
+function acceptFriendRequest(user, requestId) {
+    if (!Array.isArray(user.friendRequests)) return null;
+    const req = user.friendRequests.find(r => r.requestId === requestId);
+    if (!req) return null;
+    user.friendRequests = user.friendRequests.filter(r => r.requestId !== requestId);
+    addFriendToUser(user, req.fromUserId, req.fromUsername); // adds to user's friends list
+    // saveUserStore already called in addFriendToUser
+    return req;
+}
+
+function declineFriendRequest(user, requestId) {
+    if (!Array.isArray(user.friendRequests)) return false;
+    const before = user.friendRequests.length;
+    user.friendRequests = user.friendRequests.filter(r => r.requestId !== requestId);
+    if (user.friendRequests.length !== before) { saveUserStore(); return true; }
+    return false;
+}
+
 // ── Socket auth helpers ───────────────────────────────────────────────────────
 
 function getSocketAuthToken(socket) {
@@ -500,5 +537,8 @@ module.exports = {
     getSocketAuthToken,
     getAuthenticatedUserFromSocket,
     addFriendToUser,
-    removeFriendFromUser
+    removeFriendFromUser,
+    sendFriendRequestToUser,
+    acceptFriendRequest,
+    declineFriendRequest
 };

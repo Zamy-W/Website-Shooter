@@ -2620,6 +2620,14 @@ class MultiplayerGame {
             
             if (this.isSpectator && this.spectatorRoomId) {
                 this.socket.emit('spectateRoom', this.spectatorRoomId);
+            } else if (this.isInSocialLobby) {
+                // Re-join the lobby after a socket reconnect (e.g. after login/logout)
+                const name = this.playerName || this.profile?.username;
+                if (name) {
+                    setTimeout(() => {
+                        this.socket.emit('joinLobby', name, this.selectedSkin || 'player1', this.selectedLoadoutWeapon || 'pistol');
+                    }, 300);
+                }
             } else {
                 // Refresh lobby leaderboard when connected
                 setTimeout(() => refreshLobbyLeaderboard(), 500);
@@ -2767,12 +2775,44 @@ class MultiplayerGame {
             this.renderFriendList(this._cachedFriendList);
         });
 
-        this.socket.on('friendActionResult', (result) => {
-            if (!result.ok) {
-                // show briefly in chat log area or console
-                console.warn('Friend action failed:', result.reason);
+        this.socket.on('friendRequestResult', (result) => {
+            if (result.ok) {
+                this._showNotification(`Friend request sent to ${result.username}!`, 'success');
+            } else {
+                this._showNotification(result.reason || 'Could not send request.', 'warn');
             }
         });
+
+        this.socket.on('friendRequests', (requests) => {
+            this._cachedFriendRequests = requests || [];
+            this._renderFriendRequests(requests);
+        });
+
+        this.socket.on('friendRequestReceived', (req) => {
+            if (!this._cachedFriendRequests) this._cachedFriendRequests = [];
+            this._cachedFriendRequests.push(req);
+            this._renderFriendRequests(this._cachedFriendRequests);
+            this._showNotification(`${req.fromUsername} sent you a friend request!`, 'info', () => {
+                // Click the notification to open friends panel
+                const panel = document.getElementById('friendsPanel');
+                if (panel) panel.style.display = 'block';
+            });
+        });
+
+        this.socket.on('friendRequestAccepted', (data) => {
+            this._showNotification(`${data.byUsername} accepted your friend request! 🎉`, 'success');
+        });
+
+        this.socket.on('gameInviteReceived', (invite) => {
+            this._showGameInviteNotification(invite);
+        });
+
+        this.socket.on('gameInviteResult', (result) => {
+            if (!result.ok) this._showNotification(result.reason || 'Invite failed.', 'warn');
+            else if (result.offline) this._showNotification('Friend is offline — invite stored.', 'info');
+            else this._showNotification('Game invite sent!', 'success');
+        });
+
         // ─────────────────────────────────────────────────────────────────────
 
         this.socket.on('waveStart', (waveData) => {
@@ -4714,9 +4754,16 @@ class MultiplayerGame {
         this.socket.emit('getLobbyPlayerProfile', socketId);
     }
 
-    addLobbyFriend(targetSocketId) {
-        if (!this.socket) return;
-        this.socket.emit('addLobbyFriend', targetSocketId);
+    sendFriendRequest(targetSocketId) {
+        if (!this.socket || !this.profile) {
+            this._showNotification('Sign in to send friend requests.', 'warn'); return;
+        }
+        this.socket.emit('sendFriendRequest', targetSocketId);
+    }
+
+    sendGameInvite(targetUserId) {
+        if (!this.socket || !this.profile) return;
+        this.socket.emit('sendGameInvite', targetUserId);
     }
 
     removeFriend(userId) {
@@ -4775,13 +4822,25 @@ class MultiplayerGame {
         const sorted = [...friends].sort((a, b) => (b.isOnline ? 1 : 0) - (a.isOnline ? 1 : 0));
         for (const f of sorted) {
             const row = document.createElement('div');
-            row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:${compact ? '5px 10px' : '7px 14px'}; font-size:12px; gap:4px;`;
+            row.style.cssText = `display:flex; align-items:center; gap:4px; padding:${compact ? '5px 10px' : '7px 14px'}; font-size:12px;`;
             const dot = f.isOnline ? '🟢' : '⚫';
             const nameSpan = document.createElement('span');
             nameSpan.style.cssText = `color:${f.isOnline ? '#7ee8ff' : '#5a7a8a'}; cursor:pointer; text-decoration:underline dotted rgba(126,232,255,0.35); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
             nameSpan.textContent = dot + ' ' + f.username;
             nameSpan.title = 'View profile';
             nameSpan.onclick = () => this._showFriendProfile(f.userId, f.username);
+            row.appendChild(nameSpan);
+
+            // Invite button (only when online and we're in a room)
+            if (f.isOnline && this.profile && (this.isInSocialLobby || this.roomId)) {
+                const invBtn = document.createElement('button');
+                invBtn.textContent = '🎮';
+                invBtn.title = 'Invite to game';
+                invBtn.style.cssText = 'background:none; border:none; color:#ffc850; cursor:pointer; font-size:13px; padding:0 2px; flex-shrink:0;';
+                invBtn.onclick = (e) => { e.stopPropagation(); this.sendGameInvite(f.userId); };
+                row.appendChild(invBtn);
+            }
+
             const removeBtn = document.createElement('button');
             removeBtn.textContent = '✕';
             removeBtn.title = 'Remove friend';
@@ -4789,7 +4848,6 @@ class MultiplayerGame {
             removeBtn.onmouseenter = () => { removeBtn.style.color = '#ff6060'; };
             removeBtn.onmouseleave = () => { removeBtn.style.color = '#5a4a4a'; };
             removeBtn.onclick = () => this.removeFriend(f.userId);
-            row.appendChild(nameSpan);
             row.appendChild(removeBtn);
             list.appendChild(row);
         }
@@ -4848,6 +4906,125 @@ class MultiplayerGame {
         this._pendingPopupSocketId = null;
     }
 
+    // ── Notification toasts ───────────────────────────────────────────────────
+
+    _showNotification(message, tone = 'info', onClick = null) {
+        let container = document.getElementById('notificationContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'notificationContainer';
+            container.style.cssText = 'position:fixed; top:16px; right:16px; z-index:9000; display:flex; flex-direction:column; gap:8px; pointer-events:none; max-width:min(320px, calc(100vw - 32px));';
+            document.body.appendChild(container);
+        }
+        const colors = { success: '#00c878', warn: '#ffaa44', info: '#7ee8ff', error: '#ff6060' };
+        const toast = document.createElement('div');
+        toast.style.cssText = `background:rgba(8,18,28,0.95); border:1px solid ${colors[tone] || colors.info}44; border-left:3px solid ${colors[tone] || colors.info}; color:#cde; padding:10px 14px; border-radius:8px; font-size:13px; pointer-events:all; cursor:${onClick ? 'pointer' : 'default'}; box-shadow:0 4px 20px rgba(0,0,0,0.5); backdrop-filter:blur(8px);`;
+        toast.textContent = message;
+        if (onClick) toast.onclick = onClick;
+        container.appendChild(toast);
+        // Close on click
+        toast.addEventListener('click', () => toast.remove(), { once: true });
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
+    }
+
+    _showGameInviteNotification(invite) {
+        let container = document.getElementById('notificationContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'notificationContainer';
+            container.style.cssText = 'position:fixed; top:16px; right:16px; z-index:9000; display:flex; flex-direction:column; gap:8px; pointer-events:none; max-width:min(320px, calc(100vw - 32px));';
+            document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.style.cssText = 'background:rgba(8,18,28,0.97); border:1px solid rgba(255,200,80,0.4); border-left:3px solid #ffc850; color:#cde; padding:12px 14px; border-radius:8px; font-size:13px; pointer-events:all; box-shadow:0 4px 20px rgba(0,0,0,0.5); backdrop-filter:blur(8px);';
+
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = 'font-weight:600; color:#ffc850; margin-bottom:6px;';
+        titleEl.textContent = `🎮 ${invite.fromUsername} invited you!`;
+        const roomEl = document.createElement('div');
+        roomEl.style.cssText = 'font-size:12px; color:#7a9aaa; margin-bottom:10px;';
+        roomEl.textContent = invite.isLobby ? 'Join the Social Lobby' : `Room: ${invite.roomName || 'Game Room'}`;
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex; gap:8px;';
+
+        const acceptBtn = document.createElement('button');
+        acceptBtn.textContent = '✓ Join';
+        acceptBtn.style.cssText = 'background:rgba(0,200,120,0.15); border:1px solid rgba(0,200,120,0.4); color:#00c878; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:12px; flex:1;';
+        acceptBtn.onclick = () => {
+            toast.remove();
+            if (invite.isLobby) {
+                this.joinSocialLobby();
+            } else if (invite.roomId && this.socket) {
+                const name = this.playerName || this.profile?.username || 'Player';
+                this.socket.emit('joinRoom', invite.roomId, name, this.selectedSkin, this.selectedLoadoutWeapon);
+            }
+        };
+
+        const declineBtn = document.createElement('button');
+        declineBtn.textContent = '✕ Decline';
+        declineBtn.style.cssText = 'background:rgba(255,60,60,0.08); border:1px solid rgba(255,60,60,0.25); color:#ff6060; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:12px; flex:1;';
+        declineBtn.onclick = () => toast.remove();
+
+        btnRow.appendChild(acceptBtn);
+        btnRow.appendChild(declineBtn);
+        toast.appendChild(titleEl);
+        toast.appendChild(roomEl);
+        toast.appendChild(btnRow);
+        container.appendChild(toast);
+
+        // Auto-dismiss after 30 seconds
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 30000);
+    }
+
+    // ── Friend requests panel ─────────────────────────────────────────────────
+
+    _renderFriendRequests(requests) {
+        // Update badge on friends toggle button
+        const badge = document.getElementById('friendRequestBadge');
+        if (badge) {
+            badge.textContent = requests.length;
+            badge.style.display = requests.length > 0 ? 'flex' : 'none';
+        }
+
+        const container = document.getElementById('friendRequestsList');
+        if (!container) return;
+        if (!requests || requests.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        container.style.display = 'block';
+        container.innerHTML = '';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'font-size:11px; color:#7ee8ff; text-transform:uppercase; letter-spacing:0.08em; padding:8px 14px 4px; font-weight:600;';
+        header.textContent = `Friend Requests (${requests.length})`;
+        container.appendChild(header);
+
+        for (const req of requests) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px 14px; font-size:12px; border-bottom:1px solid rgba(126,232,255,0.06);';
+            const name = document.createElement('span');
+            name.style.cssText = 'flex:1; color:#cde; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+            name.textContent = req.fromUsername;
+            const acceptBtn = document.createElement('button');
+            acceptBtn.textContent = '✓';
+            acceptBtn.title = 'Accept';
+            acceptBtn.style.cssText = 'background:rgba(0,200,120,0.15); border:1px solid rgba(0,200,120,0.35); color:#00c878; padding:3px 8px; border-radius:5px; cursor:pointer; font-size:12px;';
+            acceptBtn.onclick = () => { if (this.socket) this.socket.emit('respondFriendRequest', req.requestId, true); };
+            const declineBtn = document.createElement('button');
+            declineBtn.textContent = '✕';
+            declineBtn.title = 'Decline';
+            declineBtn.style.cssText = 'background:none; border:none; color:#5a4a4a; padding:3px 6px; border-radius:5px; cursor:pointer; font-size:12px;';
+            declineBtn.onmouseenter = () => { declineBtn.style.color = '#ff6060'; };
+            declineBtn.onmouseleave = () => { declineBtn.style.color = '#5a4a4a'; };
+            declineBtn.onclick = () => { if (this.socket) this.socket.emit('respondFriendRequest', req.requestId, false); };
+            row.appendChild(name);
+            row.appendChild(acceptBtn);
+            row.appendChild(declineBtn);
+            container.appendChild(row);
+        }
+    }
+
     _renderLobbyPlayerPopup(data) {
         const popup = document.getElementById('lobbyPlayerPopup');
         if (!popup || !data) return;
@@ -4880,27 +5057,40 @@ class MultiplayerGame {
 
         if (actionsEl) {
             actionsEl.innerHTML = '';
+            const btnRow = document.createElement('div');
+            btnRow.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap;';
+
             if (!data.isSelf && data.accountUserId) {
                 if (data.isFriend) {
                     const removeBtn = document.createElement('button');
                     removeBtn.textContent = '✓ Friends';
-                    removeBtn.style.cssText = 'background:rgba(0,200,120,0.1); border:1px solid rgba(0,200,120,0.3); color:#00c878; padding:7px 14px; border-radius:7px; cursor:pointer; font-size:12px;';
+                    removeBtn.title = 'Click to remove friend';
+                    removeBtn.style.cssText = 'background:rgba(0,200,120,0.1); border:1px solid rgba(0,200,120,0.3); color:#00c878; padding:7px 12px; border-radius:7px; cursor:pointer; font-size:12px;';
                     removeBtn.onclick = () => { this.removeFriend(data.accountUserId); this.closeLobbyPlayerPopup(); };
-                    actionsEl.appendChild(removeBtn);
+                    btnRow.appendChild(removeBtn);
                 } else if (data.socketId) {
-                    // Can only add friend when they have a lobby socket (are currently in the lobby)
+                    // Can only send request when they're currently in the lobby
                     const addBtn = document.createElement('button');
-                    addBtn.textContent = '+ Add Friend';
-                    addBtn.style.cssText = 'background:rgba(100,180,255,0.1); border:1px solid rgba(100,180,255,0.3); color:#7eb8ff; padding:7px 14px; border-radius:7px; cursor:pointer; font-size:12px;';
-                    addBtn.onclick = () => { this.addLobbyFriend(data.socketId); this.closeLobbyPlayerPopup(); };
-                    actionsEl.appendChild(addBtn);
+                    addBtn.textContent = '➕ Send Friend Request';
+                    addBtn.style.cssText = 'background:rgba(100,180,255,0.1); border:1px solid rgba(100,180,255,0.3); color:#7eb8ff; padding:7px 12px; border-radius:7px; cursor:pointer; font-size:12px;';
+                    addBtn.onclick = () => { this.sendFriendRequest(data.socketId); this.closeLobbyPlayerPopup(); };
+                    btnRow.appendChild(addBtn);
+                }
+                // Invite to game (if logged in and in a room/lobby)
+                if (this.profile && (this.isInSocialLobby || this.roomId)) {
+                    const invBtn = document.createElement('button');
+                    invBtn.textContent = '🎮 Invite to Game';
+                    invBtn.style.cssText = 'background:rgba(255,200,80,0.1); border:1px solid rgba(255,200,80,0.3); color:#ffc850; padding:7px 12px; border-radius:7px; cursor:pointer; font-size:12px;';
+                    invBtn.onclick = () => { this.sendGameInvite(data.accountUserId); this.closeLobbyPlayerPopup(); };
+                    btnRow.appendChild(invBtn);
                 }
             } else if (!data.accountUserId && !data.isSelf) {
                 const note = document.createElement('span');
                 note.style.cssText = 'font-size:11px; color:#4a6a7a;';
                 note.textContent = 'Guest — cannot add as friend';
-                actionsEl.appendChild(note);
+                btnRow.appendChild(note);
             }
+            actionsEl.appendChild(btnRow);
         }
         // Show popup centered on screen with backdrop
         popup.style.display = 'block';
