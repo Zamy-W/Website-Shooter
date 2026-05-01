@@ -280,6 +280,8 @@ function registerSocketHandlers(io) {
             }
             socket.emit('lobbyJoined', { roomId: LOBBY_ROOM_ID, playerId: socket.id, playerCount: lobby.players.size });
             socket.emit('arenaState', lobby.getArenaState());
+            // Send an immediate gameState so the player appears without waiting for the next tick
+            socket.emit('gameState', lobby.getGameState());
             // Send recent chat history
             socket.emit('lobbyChatHistory', lobby.chatLog.slice(-50));
             socket.to(LOBBY_ROOM_ID).emit('lobbyChatMessage', {
@@ -314,7 +316,46 @@ function registerSocketHandlers(io) {
             const player = lobby.players.get(socket.id);
             const safe = String(text || '').trim().slice(0, 200);
             if (!safe) return;
-            const msg = { playerId: socket.id, playerName: player.name, text: safe, ts: Date.now() };
+
+            // Rate-limit: max 1 message per 1.5 s, mute for 10 s after 5 rapid messages
+            const now = Date.now();
+            socket.data.chatLog = socket.data.chatLog || [];
+            // Drop entries older than 10 s
+            socket.data.chatLog = socket.data.chatLog.filter(t => now - t < 10000);
+
+            if (socket.data.chatMutedUntil && now < socket.data.chatMutedUntil) {
+                const secsLeft = Math.ceil((socket.data.chatMutedUntil - now) / 1000);
+                socket.emit('lobbyChatMessage', {
+                    system: true, text: `You are sending too fast. Please wait ${secsLeft}s.`, ts: now
+                });
+                return;
+            }
+
+            const RATE_WINDOW_MS = 5000;   // sliding window
+            const MAX_IN_WINDOW  = 5;      // max messages in window before mute
+            const MUTE_DURATION  = 10000;  // 10 s mute
+            const MIN_GAP_MS     = 1000;   // minimum 1 s between messages
+
+            const windowMsgs = socket.data.chatLog.filter(t => now - t < RATE_WINDOW_MS);
+            const lastMsg = socket.data.chatLog[socket.data.chatLog.length - 1] || 0;
+
+            if (now - lastMsg < MIN_GAP_MS) {
+                socket.emit('lobbyChatMessage', {
+                    system: true, text: 'You are sending messages too quickly!', ts: now
+                });
+                return;
+            }
+
+            if (windowMsgs.length >= MAX_IN_WINDOW) {
+                socket.data.chatMutedUntil = now + MUTE_DURATION;
+                socket.emit('lobbyChatMessage', {
+                    system: true, text: `Slow down! You have been muted for ${MUTE_DURATION / 1000}s.`, ts: now
+                });
+                return;
+            }
+
+            socket.data.chatLog.push(now);
+            const msg = { playerId: socket.id, playerName: player.name, text: safe, ts: now };
             lobby.chatLog.push(msg);
             if (lobby.chatLog.length > 100) lobby.chatLog.shift();
             io.to(LOBBY_ROOM_ID).emit('lobbyChatMessage', msg);

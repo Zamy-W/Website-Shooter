@@ -259,7 +259,8 @@ class GameRoom {
         if (this.hostId === socketId) {
             this.hostId = this.players.size > 0 ? Array.from(this.players.keys())[0] : null;
         }
-        if (this.players.size === 0) this.gameStarted = false;
+        // Never disable gameStarted for the persistent lobby — it must always accept new joiners
+        if (this.players.size === 0 && !this.isLobbyMode()) this.gameStarted = false;
     }
 
     addSpectator(socket) { this.spectators.add(socket.id); socket.join(this.id); }
