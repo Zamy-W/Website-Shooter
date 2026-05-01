@@ -1991,7 +1991,8 @@ class MultiplayerGame {
     }
 
     openLoadoutShop() {
-        if (this.inGame) {
+        // Allow opening from the social lobby even though inGame is true there
+        if (this.inGame && !this.isInSocialLobby) {
             return;
         }
 
@@ -4550,9 +4551,8 @@ class MultiplayerGame {
     }
 
     openGearShopFromLobby() {
-        // Reuse existing gear shop; wire appearance update on close
         this._lobbyOpenedShop = true;
-        if (typeof openGearShop === 'function') openGearShop();
+        this.openLoadoutShop();
     }
 
     _showSocialLobbyUI() {
