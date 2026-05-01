@@ -2366,6 +2366,16 @@
             font-size:10px; font-weight:700; align-items:center; justify-content:center; padding:0 4px;">0</span>
     </div>
 
+    <!-- Separate PM button (shown alongside friends button) -->
+    <div id="pmToggleBtn" style="display:none; position:fixed; bottom:20px; right:20px; z-index:3500;
+         background:rgba(8,20,36,0.95); border:1px solid rgba(126,232,255,0.35); border-radius:50px;
+         padding:9px 16px; cursor:pointer; font-family:inherit; font-size:13px; font-weight:700;
+         color:#7ee8ff; box-shadow:0 4px 20px rgba(0,0,0,0.5); user-select:none;
+         align-items:center; gap:6px; margin-right:0;" onclick="window.game && window.game.togglePmPanel()">
+        💬 <span id="pmUnreadBadge" style="display:none; background:#ff4455; color:#fff; border-radius:999px;
+            min-width:18px; height:18px; font-size:10px; font-weight:700; align-items:center; justify-content:center; padding:0 4px;">0</span>
+    </div>
+
     <!-- Slide-out friends panel -->
     <div id="friendsPanel" style="display:none; position:fixed; bottom:70px; right:20px; z-index:3500;
          width:270px; background:rgba(8,16,24,0.97); border:1px solid rgba(100,180,220,0.25);
@@ -2389,6 +2399,49 @@
         </div>
     </div>
     <!-- ─────────────────────────────────────────────────────────────────── -->
+
+    <!-- ── PM Panel ──────────────────────────────────────────────────────── -->
+    <div id="pmPanel" style="display:none; flex-direction:column; position:fixed; z-index:3600;
+         bottom:70px; right:12px; width:min(310px, calc(100vw - 24px));
+         height:min(420px, calc(100vh - 100px));
+         background:rgba(6,14,24,0.98); border:1px solid rgba(100,180,220,0.3);
+         border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,0.75); font-family:inherit; overflow:hidden;">
+
+        <!-- Header -->
+        <div style="display:flex; align-items:center; justify-content:space-between;
+             padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.07); flex-shrink:0;">
+            <div>
+                <div id="pmHeaderName" style="font-size:13px; font-weight:700; color:#7ee8ff;">Messages</div>
+                <div style="font-size:10px; color:#3a5a6a; margin-top:1px;">Private · end-to-end in session</div>
+            </div>
+            <button onclick="window.game && window.game.closePmPanel()"
+                style="background:rgba(255,80,80,0.08); border:1px solid rgba(255,80,80,0.2);
+                       color:#ff8080; cursor:pointer; font-size:12px; padding:3px 9px; border-radius:6px;">✕</button>
+        </div>
+
+        <!-- Conversation tabs (scrollable row) -->
+        <div id="pmTabs" style="display:flex; overflow-x:auto; border-bottom:1px solid rgba(255,255,255,0.06);
+             flex-shrink:0; scrollbar-width:none;"></div>
+
+        <!-- Messages -->
+        <div id="pmMessages" style="flex:1; overflow-y:auto; padding:12px 12px 6px;
+             display:flex; flex-direction:column; gap:5px; scrollbar-width:thin; scrollbar-color:#1a3040 transparent;"></div>
+
+        <!-- Input row -->
+        <div style="display:flex; gap:6px; padding:8px 10px; border-top:1px solid rgba(255,255,255,0.07); flex-shrink:0;">
+            <input id="pmInput" type="text" placeholder="Message…" maxlength="400" autocomplete="off"
+                style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(100,180,220,0.2);
+                       border-radius:9px; color:#cde; padding:8px 11px; font-size:12.5px;
+                       font-family:inherit; outline:none;"
+                onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); window.game && window.game.sendPmMessage(); }">
+            <button onclick="window.game && window.game.sendPmMessage()"
+                style="background:rgba(100,180,255,0.14); border:1px solid rgba(100,180,255,0.32);
+                       color:#7eb8ff; padding:8px 13px; border-radius:9px; cursor:pointer; font-size:12px; flex-shrink:0;">Send</button>
+        </div>
+    </div>
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+
+    <!-- Unread PM badge on friends toggle button is added via JS -->
 
     <!-- Player profile popup — centered, above everything -->
     <div id="lobbyPlayerPopup" style="display:none; position:fixed; z-index:4000;

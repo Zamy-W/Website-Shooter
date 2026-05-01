@@ -575,6 +575,52 @@ function registerSocketHandlers(io) {
             socket.emit('gameInviteResult', { ok: true, sent, offline: !sent });
         });
 
+        // ── Private messages ──────────────────────────────────────────────────
+
+        socket.on('sendPm', (targetUserId, message) => {
+            const sender = getAuthenticatedUserFromSocket(socket);
+            if (!sender) { socket.emit('pmError', 'Sign in to send private messages.'); return; }
+            if (!targetUserId || typeof targetUserId !== 'string') return;
+            if (sender.id === targetUserId) { socket.emit('pmError', 'Cannot PM yourself.'); return; }
+
+            const safe = String(message || '').trim().slice(0, 400);
+            if (!safe) return;
+
+            // Rate limit: max 6 messages per 8 s; 15 s mute after burst
+            const now = Date.now();
+            socket.data.pmLog = (socket.data.pmLog || []).filter(t => now - t < 8000);
+            if (socket.data.pmMutedUntil && now < socket.data.pmMutedUntil) {
+                socket.emit('pmError', 'Sending too fast — wait a moment.'); return;
+            }
+            if (socket.data.pmLog.length >= 6) {
+                socket.data.pmMutedUntil = now + 15000;
+                socket.emit('pmError', 'Slow down! Muted for 15 s.'); return;
+            }
+            socket.data.pmLog.push(now);
+
+            const targetUser = getUserById(targetUserId);
+            if (!targetUser) { socket.emit('pmError', 'User not found.'); return; }
+
+            const payload = {
+                fromUserId: sender.id,
+                fromUsername: sender.username,
+                toUserId: targetUserId,
+                toUsername: targetUser.username,
+                text: safe,
+                ts: now
+            };
+
+            let delivered = false;
+            for (const s of io.sockets.sockets.values()) {
+                if (s.data?.authUserId === targetUserId) {
+                    s.emit('pmReceived', payload);
+                    delivered = true;
+                }
+            }
+            // Echo confirmation back to sender
+            socket.emit('pmSent', { ...payload, delivered });
+        });
+
         socket.on('disconnect', () => {
             console.log(`Player disconnected: ${socket.id} (Remaining clients: ${io.engine.clientsCount - 1})`);
             // Notify this user's friends that they went offline

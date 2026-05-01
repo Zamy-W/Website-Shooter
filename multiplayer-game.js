@@ -286,6 +286,13 @@ class MultiplayerGame {
 
         // Social lobby
         this.isInSocialLobby = false;
+
+        // Private messaging
+        this._pmConversations = new Map(); // userId -> { username, messages:[], unread:0 }
+        this._activePmUserId = null;
+        this._pmPanelOpen = false;
+        this._cachedFriendList = [];
+        this._cachedFriendRequests = [];
         this.wave = 1;
         this.waveInfo = {
             bossWave: false,
@@ -1565,15 +1572,25 @@ class MultiplayerGame {
         this.rebuildWeaponSelector();
         this.updateWeaponSelector();
 
-        // Show/hide persistent friends panel toggle button
+        // Show/hide persistent friends & PM buttons
         const toggleBtn = document.getElementById('friendsToggleBtn');
-        if (toggleBtn) toggleBtn.style.display = this.profile ? 'flex' : 'none';
+        const pmToggleBtn = document.getElementById('pmToggleBtn');
+        if (this.profile) {
+            // Friends button right side, PM button to its left
+            if (toggleBtn) { toggleBtn.style.display = 'flex'; toggleBtn.style.right = '20px'; }
+            if (pmToggleBtn) { pmToggleBtn.style.display = 'flex'; pmToggleBtn.style.right = '160px'; }
+        } else {
+            if (toggleBtn) toggleBtn.style.display = 'none';
+            if (pmToggleBtn) { pmToggleBtn.style.display = 'none'; this.closePmPanel(); }
+        }
         // If logging out, close and clear the panel
         if (!this.profile) {
             const panel = document.getElementById('friendsPanel');
             if (panel) panel.style.display = 'none';
             const pl = document.getElementById('friendsPanelList');
             if (pl) pl.innerHTML = '<div style="padding:14px; font-size:12px; color:#4a6a7a; text-align:center;">Sign in to see your friends here.</div>';
+            this._pmConversations = new Map();
+            this._activePmUserId = null;
         }
     }
 
@@ -2811,6 +2828,39 @@ class MultiplayerGame {
             if (!result.ok) this._showNotification(result.reason || 'Invite failed.', 'warn');
             else if (result.offline) this._showNotification('Friend is offline — invite stored.', 'info');
             else this._showNotification('Game invite sent!', 'success');
+        });
+
+        // ── Private messages ──────────────────────────────────────────────────
+        this.socket.on('pmReceived', (pm) => {
+            if (!this._pmConversations) this._pmConversations = new Map();
+            let conv = this._pmConversations.get(pm.fromUserId);
+            if (!conv) { conv = { username: pm.fromUsername, messages: [], unread: 0 }; this._pmConversations.set(pm.fromUserId, conv); }
+            conv.messages.push({ ...pm, isSelf: false });
+            const isPanelFocused = this._pmPanelOpen && this._activePmUserId === pm.fromUserId;
+            if (!isPanelFocused) {
+                conv.unread++;
+                this._updatePmBadge();
+                this._showNotification(`💬 ${pm.fromUsername}: ${pm.text.length > 60 ? pm.text.slice(0, 60) + '…' : pm.text}`, 'info', () => {
+                    this.openPmWith(pm.fromUserId, pm.fromUsername);
+                });
+            } else {
+                this._renderPmMessages();
+            }
+        });
+
+        this.socket.on('pmSent', (pm) => {
+            if (!this._pmConversations) return;
+            const conv = this._pmConversations.get(pm.toUserId);
+            if (conv) {
+                // Message was already added optimistically — just mark delivered
+                const last = conv.messages[conv.messages.length - 1];
+                if (last && last.isSelf && last.text === pm.text) last.delivered = pm.delivered;
+                this._renderPmMessages();
+            }
+        });
+
+        this.socket.on('pmError', (msg) => {
+            this._showNotification(msg, 'warn');
         });
 
         // ─────────────────────────────────────────────────────────────────────
@@ -4766,6 +4816,154 @@ class MultiplayerGame {
         this.socket.emit('sendGameInvite', targetUserId);
     }
 
+    // ── Private messaging ─────────────────────────────────────────────────────
+
+    openPmWith(userId, username) {
+        if (!this.profile) { this._showNotification('Sign in to send private messages.', 'warn'); return; }
+        if (!this._pmConversations) this._pmConversations = new Map();
+        if (!this._pmConversations.has(userId)) {
+            this._pmConversations.set(userId, { username, messages: [], unread: 0 });
+        } else {
+            this._pmConversations.get(userId).unread = 0;
+        }
+        this._activePmUserId = userId;
+        this._pmPanelOpen = true;
+        this._updatePmBadge();
+        this._renderPmPanel();
+        // Focus input
+        setTimeout(() => { const inp = document.getElementById('pmInput'); if (inp) inp.focus(); }, 50);
+    }
+
+    closePmPanel() {
+        this._pmPanelOpen = false;
+        const panel = document.getElementById('pmPanel');
+        if (panel) panel.style.display = 'none';
+    }
+
+    togglePmPanel() {
+        if (this._pmPanelOpen) {
+            this.closePmPanel();
+        } else {
+            // Open most-recently-active conversation, or the first one available
+            const firstId = this._activePmUserId || (this._pmConversations?.keys().next().value);
+            if (firstId) {
+                const conv = this._pmConversations.get(firstId);
+                this.openPmWith(firstId, conv.username);
+            } else {
+                // No conversations yet — open blank panel with instructions
+                const panel = document.getElementById('pmPanel');
+                if (panel) {
+                    this._pmPanelOpen = true;
+                    panel.style.display = 'flex';
+                    const msgsEl = document.getElementById('pmMessages');
+                    if (msgsEl) msgsEl.innerHTML = '<div style="text-align:center; color:#3a5a6a; font-size:12px; margin-top:30px;">Open a conversation from the<br>Friends panel or a player profile.</div>';
+                    const nameEl = document.getElementById('pmHeaderName');
+                    if (nameEl) nameEl.textContent = 'Messages';
+                }
+            }
+        }
+    }
+
+    sendPmMessage() {
+        const input = document.getElementById('pmInput');
+        if (!input || !this._activePmUserId || !this.socket || !this.profile) return;
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+
+        // Optimistically add to local conversation
+        const conv = this._pmConversations?.get(this._activePmUserId);
+        if (conv) {
+            conv.messages.push({ fromUserId: this.profile.id, fromUsername: this.profile.username, text, ts: Date.now(), isSelf: true, delivered: false });
+            this._renderPmMessages();
+        }
+        this.socket.emit('sendPm', this._activePmUserId, text);
+    }
+
+    _updatePmBadge() {
+        let total = 0;
+        if (this._pmConversations) for (const c of this._pmConversations.values()) total += c.unread;
+        const badge = document.getElementById('pmUnreadBadge');
+        if (badge) { badge.textContent = total; badge.style.display = total > 0 ? 'flex' : 'none'; }
+    }
+
+    _renderPmPanel() {
+        const panel = document.getElementById('pmPanel');
+        if (!panel) return;
+        panel.style.display = 'flex';
+        // Position: right of friends panel on desktop, flush right on mobile
+        const friendsPanel = document.getElementById('friendsPanel');
+        const isMobile = window.innerWidth <= 640;
+        if (!isMobile && friendsPanel && friendsPanel.style.display !== 'none') {
+            panel.style.right = '302px'; // 270px panel + 20px margin + 12px gap
+        } else {
+            panel.style.right = '12px';
+        }
+        this._renderPmTabs();
+        this._renderPmMessages();
+        // Update header
+        const conv = this._pmConversations?.get(this._activePmUserId);
+        const nameEl = document.getElementById('pmHeaderName');
+        if (nameEl) nameEl.textContent = conv ? conv.username : '—';
+    }
+
+    _renderPmTabs() {
+        const tabsEl = document.getElementById('pmTabs');
+        if (!tabsEl || !this._pmConversations) return;
+        tabsEl.innerHTML = '';
+        for (const [uid, conv] of this._pmConversations) {
+            const tab = document.createElement('div');
+            const isActive = uid === this._activePmUserId;
+            tab.style.cssText = `display:flex; align-items:center; gap:5px; padding:6px 12px; font-size:11px; cursor:pointer; white-space:nowrap; border-bottom:2px solid ${isActive ? '#7ee8ff' : 'transparent'}; color:${isActive ? '#7ee8ff' : '#4a7a8a'}; flex-shrink:0; transition:color 0.15s;`;
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = conv.username;
+            tab.appendChild(nameSpan);
+            if (conv.unread > 0 && !isActive) {
+                const badge = document.createElement('span');
+                badge.style.cssText = 'background:#ff4455; color:#fff; border-radius:999px; min-width:14px; height:14px; font-size:9px; display:inline-flex; align-items:center; justify-content:center; padding:0 3px;';
+                badge.textContent = conv.unread;
+                tab.appendChild(badge);
+            }
+            tab.onclick = () => { this._activePmUserId = uid; conv.unread = 0; this._updatePmBadge(); this._renderPmPanel(); };
+            tabsEl.appendChild(tab);
+        }
+    }
+
+    _renderPmMessages() {
+        const msgsEl = document.getElementById('pmMessages');
+        if (!msgsEl || !this._activePmUserId) return;
+        const conv = this._pmConversations?.get(this._activePmUserId);
+        msgsEl.innerHTML = '';
+        if (!conv || conv.messages.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'text-align:center; color:#3a5a6a; font-size:12px; margin-top:20px;';
+            empty.textContent = 'No messages yet. Say hi! 👋';
+            msgsEl.appendChild(empty);
+            return;
+        }
+        let lastDate = null;
+        for (const msg of conv.messages) {
+            // Date separator
+            const msgDate = new Date(msg.ts).toLocaleDateString();
+            if (msgDate !== lastDate) {
+                const sep = document.createElement('div');
+                sep.style.cssText = 'text-align:center; font-size:10px; color:#2a4a5a; margin:6px 0 4px;';
+                sep.textContent = msgDate === new Date().toLocaleDateString() ? 'Today' : msgDate;
+                msgsEl.appendChild(sep);
+                lastDate = msgDate;
+            }
+            const isSelf = msg.isSelf || msg.fromUserId === this.profile?.id;
+            const bubble = document.createElement('div');
+            bubble.style.cssText = `max-width:82%; padding:8px 12px; border-radius:${isSelf ? '14px 14px 4px 14px' : '14px 14px 14px 4px'}; font-size:12.5px; line-height:1.45; word-break:break-word; align-self:${isSelf ? 'flex-end' : 'flex-start'}; background:${isSelf ? 'rgba(100,180,255,0.14)' : 'rgba(255,255,255,0.06)'}; border:1px solid ${isSelf ? 'rgba(100,180,255,0.28)' : 'rgba(255,255,255,0.09)'}; color:${isSelf ? '#b8deff' : '#cde'}; position:relative;`;
+            bubble.textContent = msg.text;
+            // Timestamp tooltip on hover
+            const time = new Date(msg.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            bubble.title = `${isSelf ? 'You' : msg.fromUsername} · ${time}`;
+            msgsEl.appendChild(bubble);
+        }
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+
     removeFriend(userId) {
         if (!this.socket || !userId) return;
         if (!confirm('Remove this friend?')) return;
@@ -4831,6 +5029,18 @@ class MultiplayerGame {
             nameSpan.onclick = () => this._showFriendProfile(f.userId, f.username);
             row.appendChild(nameSpan);
 
+            // Message button (always for friends with accounts)
+            if (this.profile) {
+                const msgBtn = document.createElement('button');
+                msgBtn.textContent = '💬';
+                msgBtn.title = 'Send private message';
+                msgBtn.style.cssText = 'background:none; border:none; color:#7ee8ff; cursor:pointer; font-size:13px; padding:0 2px; flex-shrink:0; opacity:0.75;';
+                msgBtn.onmouseenter = () => { msgBtn.style.opacity = '1'; };
+                msgBtn.onmouseleave = () => { msgBtn.style.opacity = '0.75'; };
+                msgBtn.onclick = (e) => { e.stopPropagation(); this.openPmWith(f.userId, f.username); };
+                row.appendChild(msgBtn);
+            }
+
             // Invite button (only when online and we're in a room)
             if (f.isOnline && this.profile && (this.isInSocialLobby || this.roomId)) {
                 const invBtn = document.createElement('button');
@@ -4859,6 +5069,8 @@ class MultiplayerGame {
         const isOpen = panel.style.display !== 'none';
         panel.style.display = isOpen ? 'none' : 'block';
         if (!isOpen && this.socket) this.socket.emit('getFriends');
+        // Reposition PM panel if it's open
+        if (this._pmPanelOpen) this._renderPmPanel();
     }
 
     _showLobbyPlayerPopup(socketId) {
@@ -5076,10 +5288,19 @@ class MultiplayerGame {
                     addBtn.onclick = () => { this.sendFriendRequest(data.socketId); this.closeLobbyPlayerPopup(); };
                     btnRow.appendChild(addBtn);
                 }
+                // Message button (for any account player you're not messaging yourself)
+                if (this.profile) {
+                    const msgBtn = document.createElement('button');
+                    msgBtn.textContent = '💬 Message';
+                    msgBtn.style.cssText = 'background:rgba(126,232,255,0.08); border:1px solid rgba(126,232,255,0.25); color:#7ee8ff; padding:7px 12px; border-radius:7px; cursor:pointer; font-size:12px;';
+                    msgBtn.onclick = () => { this.openPmWith(data.accountUserId, data.accountUsername || data.name); this.closeLobbyPlayerPopup(); };
+                    btnRow.appendChild(msgBtn);
+                }
+
                 // Invite to game (if logged in and in a room/lobby)
                 if (this.profile && (this.isInSocialLobby || this.roomId)) {
                     const invBtn = document.createElement('button');
-                    invBtn.textContent = '🎮 Invite to Game';
+                    invBtn.textContent = '🎮 Invite';
                     invBtn.style.cssText = 'background:rgba(255,200,80,0.1); border:1px solid rgba(255,200,80,0.3); color:#ffc850; padding:7px 12px; border-radius:7px; cursor:pointer; font-size:12px;';
                     invBtn.onclick = () => { this.sendGameInvite(data.accountUserId); this.closeLobbyPlayerPopup(); };
                     btnRow.appendChild(invBtn);
